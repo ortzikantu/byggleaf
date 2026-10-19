@@ -1,0 +1,10 @@
+include README.md
+include LICENSE
+include CHANGELOG.md
+include CONTRIBUTING.md
+include pyproject.toml
+recursive-include byggleaf/assets *
+recursive-include byggleaf/templates *
+recursive-include byggleaf/resources *
+recursive-include byggleaf/locales *
+recursive-include tests *.py

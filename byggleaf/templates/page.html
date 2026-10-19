@@ -1,0 +1,16 @@
+{# About, statement, or any other content/<folder>/index.md page. #}
+{% extends "base.html" %}
+
+{% block title %}{{ page.title }} · {{ site.title }}{% endblock %}
+
+{% block content %}
+<article class="page">
+  <header class="page-header">
+    <h1 class="page-title">{{ page.title }}</h1>
+  </header>
+
+  <div class="prose">
+    {{ page.html|safe }}
+  </div>
+</article>
+{% endblock %}

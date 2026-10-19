@@ -1,0 +1,59 @@
+{# Home page at /. The post stream is paginated here; there is no archive page. #}
+{% extends "base.html" %}
+
+{% block title %}{% if pagination.current_page > 1 %}{{ ui('page_title', page=pagination.current_page) }} · {% endif %}{{ site.title }}{% endblock %}
+
+{% block content %}
+{% if pagination.current_page == 1 %}
+<section class="hero" aria-labelledby="hero-title">
+  <h1 id="hero-title">{{ site.title }}</h1>
+  {% if site.hero_subtitle %}
+  <p class="hero-subtitle">{{ site.hero_subtitle }}</p>
+  {% endif %}
+</section>
+{% endif %}
+
+<section id="writing" class="home-section" aria-labelledby="writing-title">
+  {% if pagination.current_page == 1 %}
+  <div class="section-heading">
+    <h2 id="writing-title">{{ ui('writing') }}</h2>
+  </div>
+  {% else %}
+  <header class="page-header">
+    <h1 id="writing-title" class="page-title">{{ ui('writing') }}</h1>
+  </header>
+  {% endif %}
+
+  {% include "postlist.html" %}
+
+  {% if pagination.total_pages > 1 %}
+  <nav class="pagination" aria-label="{{ ui('post_pagination') }}">
+    {% if pagination.previous_url %}
+    <a class="pagination-prev" href="{{ url(pagination.previous_url) }}" rel="prev">← {{ ui('newer') }}</a>
+    {% endif %}
+    <span class="pagination-status" aria-label="{{ ui('page_of', current=pagination.current_page, total=pagination.total_pages) }}">{{ pagination.current_page }} / {{ pagination.total_pages }}</span>
+    {% if pagination.next_url %}
+    <a class="pagination-next" href="{{ url(pagination.next_url) }}" rel="next">{{ ui('older') }} →</a>
+    {% endif %}
+  </nav>
+  {% endif %}
+</section>
+
+{% if projects and pagination.current_page == 1 %}
+<section class="home-section" aria-labelledby="projects-title">
+  <div class="section-heading">
+    <h2 id="projects-title">{{ ui('projects') }}</h2>
+  </div>
+  <ul class="project-list">
+    {% for project in projects %}
+    <li class="project">
+      <h3 class="project-name"><a href="{{ project.url }}">{{ project.name }}</a></h3>
+      {% if project.description %}
+      <p class="project-description">{{ project.description }}</p>
+      {% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

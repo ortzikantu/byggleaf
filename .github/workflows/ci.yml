@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Ruff
+        run: ruff check .
+
+      - name: mypy
+        run: mypy byggleaf
+
+      - name: Tests and coverage
+        run: |
+          coverage run -m unittest discover -s tests -v
+          coverage report
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Install wheel
+        run: python -m pip install --force-reinstall --no-deps dist/*.whl
+
+      - name: Console script smoke
+        run: |
+          cd "$RUNNER_TEMP"
+          byggleaf --version

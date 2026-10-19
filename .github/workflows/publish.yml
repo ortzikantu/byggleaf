@@ -1,0 +1,143 @@
+# 发布：手动打 tag 后，仓库自动校验、构建并发布到 PyPI。
+#
+# 认证使用 PyPI Trusted Publishing（OIDC），仓库中不保存 token。
+# 首次发布前需要在 PyPI 登记：
+#   Owner:       <GitHub 用户/组织>
+#   Repository:  <仓库名>
+#   Workflow:    publish.yml
+#   Environment: pypi
+#
+# tag 去掉前缀 v 后必须与 pyproject.toml 的 version 完全一致。
+
+name: publish
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: 校验版本与产物
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: tag 必须与 pyproject 版本一致
+        run: |
+          python - <<'PY'
+          import os, pathlib, tomllib
+
+          version = tomllib.loads(
+              pathlib.Path("pyproject.toml").read_text(encoding="utf-8")
+          )["project"]["version"]
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          assert tag == version, f"tag {tag!r} 与 pyproject 的 version {version!r} 不一致"
+          print(f"版本一致：{version}")
+          PY
+
+      - name: 静态检查与测试
+        run: |
+          ruff check .
+          mypy byggleaf
+          coverage run -m unittest discover -s tests -v
+          coverage report
+
+      - name: 构建
+        run: |
+          rm -rf dist build ./*.egg-info
+          python -m build
+          ls -l dist/
+
+      - name: 产物自检
+        run: |
+          set -e
+          python -m twine check dist/*
+          python - <<'PY'
+          import glob, tarfile, zipfile
+
+          wheel = glob.glob("dist/*.whl")[0]
+          sdist = glob.glob("dist/*.tar.gz")[0]
+          wheel_names = zipfile.ZipFile(wheel).namelist()
+          with tarfile.open(sdist) as archive:
+              sdist_names = archive.getnames()
+
+          required_wheel = (
+              "byggleaf/core/locales.py",
+              "byggleaf/core/seo.py",
+              "byggleaf/templates/base.html",
+              "byggleaf/assets/css/style.css",
+              "byggleaf/locales/en.toml",
+          )
+          for name in required_wheel:
+              assert any(item.endswith(name) for item in wheel_names), f"wheel 缺少 {name}"
+
+          assert any(item.endswith("licenses/LICENSE") or item.endswith("/LICENSE")
+                     for item in wheel_names), "wheel 缺少 LICENSE"
+          for name in ("LICENSE", "README.md", "CHANGELOG.md", "CONTRIBUTING.md"):
+              assert any(item.endswith(name) for item in sdist_names), f"sdist 缺少 {name}"
+          assert not any("exampleSite" in item for item in wheel_names + sdist_names)
+          print("产物检查通过")
+          PY
+
+      - name: 安装 wheel 冒烟
+        run: |
+          python -m pip install --force-reinstall --no-deps dist/*.whl
+          cd "$RUNNER_TEMP"
+          byggleaf --version
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    name: 发布到 PyPI
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: 发布
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    name: 创建 GitHub Release
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: 创建 Release 并附上产物
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

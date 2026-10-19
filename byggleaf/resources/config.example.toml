@@ -1,0 +1,14 @@
+# ByggLeaf is configured in one place. There is no theme block because there
+# is no theme system. The values below are the entire public surface.
+[site]
+title = "My Digital Garden"
+hero_subtitle = "用代码和文字记录生活。"
+baseurl = "https://example.com"
+copyright = "Your Name"
+language = "zh-CN"
+posts_per_page = 5
+
+[[projects]]
+name = "Lemovind"
+url = "https://github.com/example/lemovind"
+description = "Dynamic blog in Rust."

@@ -1,0 +1,20 @@
+{# The article stream used on the home page. #}
+{% if posts %}
+<ol class="post-list">
+  {% for post in posts %}
+  <li class="post-list-item">
+    <article>
+      <p class="post-meta">
+        <time datetime="{{ post.date.isoformat() }}">{{ post.date|datefmt }}</time>
+      </p>
+      <h2 class="post-list-title"><a href="{{ url(post.url) }}">{{ post.title }}</a></h2>
+      {% if post.summary %}
+      <p class="post-summary">{{ post.summary }}</p>
+      {% endif %}
+    </article>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<p class="empty-state">{{ ui('empty_posts') }}</p>
+{% endif %}

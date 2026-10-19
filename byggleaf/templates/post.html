@@ -1,0 +1,56 @@
+{# One post at /posts/<slug>/. #}
+{% extends "base.html" %}
+
+{% block title %}{{ post.title }} · {{ site.title }}{% endblock %}
+
+{% block meta %}
+<meta name="description" content="{{ post.summary or post.title }}">
+{% if post.author %}
+<meta name="author" content="{{ post.author }}">
+{% endif %}
+{% if post.tags %}
+<meta name="keywords" content="{{ post.tags|join(', ') }}">
+{% endif %}
+<link rel="canonical" href="{{ url(post.url) }}">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="{{ site.title }}">
+<meta property="og:title" content="{{ post.title }}">
+<meta property="og:description" content="{{ post.summary or post.title }}">
+<meta property="og:url" content="{{ url(post.url) }}">
+<meta property="article:published_time" content="{{ post.date.isoformat() }}">
+{% if post.updated %}
+<meta property="article:modified_time" content="{{ post.updated.isoformat() }}">
+{% endif %}
+{% if post.author %}
+<meta property="article:author" content="{{ post.author }}">
+{% endif %}
+{% for tag in post.tags %}
+<meta property="article:tag" content="{{ tag }}">
+{% endfor %}
+{% endblock %}
+
+{% block content %}
+<article class="post">
+  <header class="post-header">
+    <h1 class="post-title">{{ post.title }}</h1>
+    <p class="post-meta">
+      <time datetime="{{ post.date.isoformat() }}">{{ post.date|datefmt }}</time>
+      {% if post.author %}
+      <span class="post-author">{{ post.author }}</span>
+      {% endif %}
+      {% if post.updated %}
+      <span class="post-updated">{{ ui('updated') }} <time datetime="{{ post.updated.isoformat() }}">{{ post.updated|datefmt }}</time></span>
+      {% endif %}
+    </p>
+  </header>
+
+  {# Markdown output is sanitised in core/markdown.py before it reaches here. #}
+  <div class="prose">
+    {{ post.html|safe }}
+  </div>
+</article>
+
+<nav class="post-footer-nav" aria-label="{{ ui('post_navigation') }}">
+  <a href="{{ url(back_url) }}">← {{ ui('all_posts') }}</a>
+</nav>
+{% endblock %}

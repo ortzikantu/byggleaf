@@ -1,0 +1,56 @@
+{# One base shell. Head, navbar and footer change together, so they live here
+   instead of being scattered across tiny partials. The only reusable fragment
+   is postlist.html. #}
+<!doctype html>
+<html lang="{{ site.language }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="generator" content="ByggLeaf {{ version }}">
+  {% block meta %}
+  <meta name="description" content="{{ meta_description }}">
+  <link rel="canonical" href="{{ url(canonical_path) }}">
+  <meta property="og:type" content="{{ og_type }}">
+  <meta property="og:site_name" content="{{ site.title }}">
+  <meta property="og:title" content="{{ meta_title }}">
+  <meta property="og:description" content="{{ meta_description }}">
+  <meta property="og:url" content="{{ url(canonical_path) }}">
+  {% endblock %}
+  <title>{% block title %}{{ site.title }}{% endblock %}</title>
+  <link rel="alternate" type="application/rss+xml" title="{{ site.title }} RSS" href="{{ url('/rss.xml') }}">
+  <link rel="sitemap" type="application/xml" href="{{ url('/sitemap.xml') }}">
+  {% if favicon %}
+  <link rel="icon" href="{{ url(favicon) }}">
+  {% endif %}
+  <link rel="stylesheet" href="{{ url('/assets/css/style.css') }}">
+</head>
+<body>
+  <a class="skip-link" href="#main">{{ ui('skip_to_content') }}</a>
+
+  <div class="site-shell">
+    <header class="site-header">
+      {# Exactly two links. Hidden pages are never appended here. #}
+      <nav class="site-nav" aria-label="{{ ui('primary_nav') }}">
+        <ul>
+          {% for item in nav %}
+          <li>
+            <a href="{{ url(item.url) }}"{% if item.active %} class="is-active" aria-current="page"{% endif %}>{{ item.label }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </nav>
+    </header>
+
+    <main id="main" class="site-main" tabindex="-1">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      {% if site.copyright %}
+      <p class="copyright">{{ site.copyright }}</p>
+      {% endif %}
+      <p class="colophon">{{ ui('colophon', version=version) }}</p>
+    </footer>
+  </div>
+</body>
+</html>

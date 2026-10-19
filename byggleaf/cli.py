@@ -1,0 +1,284 @@
+"""Command-line surface for ByggLeaf.
+
+This module defines *what* the commands look like and *when* they run.  It
+does not know *how* a site is built.  The actual handlers are injected by
+``byggleaf.app``, which is the only module allowed to see both ``cli`` and
+``core``.  That keeps the command line reusable and the dependency graph
+acyclic.
+
+The module imports only the standard library.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TextIO
+
+# ANSI colours.  These mirror the two accents of the design system: a deep
+# forest green for successful, living things and terracotta for attention.
+FOREST_GREEN = "\x1b[38;5;35m"
+TERRACOTTA = "\x1b[38;5;173m"
+DIM = "\x1b[2m"
+BOLD = "\x1b[1m"
+RESET = "\x1b[0m"
+
+# The command line deliberately does not import core.  These defaults are also
+# declared in core/server.py; a test pins the two values together.
+DEFAULT_HOST = "127.0.0.1"
+DEFAULT_PORT = 6789
+
+
+def _supports_colour(stream: TextIO) -> bool:
+    """Honour the usual colour conventions without ever forcing ANSI codes."""
+
+    if os.environ.get("NO_COLOR") is not None:
+        return False
+    if os.environ.get("FORCE_COLOR") is not None:
+        return True
+    if os.environ.get("TERM") == "dumb":
+        return False
+    return bool(getattr(stream, "isatty", lambda: False)())
+
+
+class Console:
+    """Tiny, dependency-free writer for human-facing terminal output."""
+
+    def __init__(self, stream: TextIO | None = None, *, colour: bool | None = None) -> None:
+        self.stream = stream if stream is not None else sys.stdout
+        self.colour = _supports_colour(self.stream) if colour is None else colour
+
+    def _paint(self, text: str, code: str) -> str:
+        return f"{code}{text}{RESET}" if self.colour else text
+
+    def _line(self, text: str = "") -> None:
+        self.stream.write(f"{text}\n")
+        self.stream.flush()
+
+    def heading(self, text: str) -> None:
+        """A command banner: ``ByggLeaf · build``."""
+
+        self._line(self._paint(f"ByggLeaf · {text}", BOLD + TERRACOTTA))
+
+    def success(self, text: str) -> None:
+        self._line(self._paint(text, FOREST_GREEN))
+
+    def accent(self, text: str) -> None:
+        self._line(self._paint(text, TERRACOTTA))
+
+    def muted(self, text: str) -> None:
+        self._line(self._paint(text, DIM))
+
+    def error(self, text: str) -> None:
+        self._line(self._paint(f"error: {text}", TERRACOTTA))
+
+    def item(self, label: str, value: str) -> None:
+        """A quiet two-column detail line used by build/init summaries."""
+
+        label_text = self._paint(f"{label:<9}", FOREST_GREEN)
+        self._line(f"  {label_text}{value}")
+
+
+# ---------------------------------------------------------------------------
+# Command options and injected handlers
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class InitOptions:
+    root: Path
+    force: bool
+
+
+@dataclass(frozen=True)
+class BuildOptions:
+    root: Path
+
+
+@dataclass(frozen=True)
+class CleanOptions:
+    root: Path
+
+
+@dataclass(frozen=True)
+class NewOptions:
+    root: Path
+    kind: str
+
+
+@dataclass(frozen=True)
+class ServeOptions:
+    root: Path
+    host: str
+    port: int
+
+
+@dataclass(frozen=True)
+class Handlers:
+    """The application services the command line is allowed to call.
+
+    ``app.py`` supplies implementations that wrap scaffold/core.  Keeping this
+    as a plain value object means ``cli.py`` has no import path to core.
+    """
+
+    init: Callable[[InitOptions], int]
+    build: Callable[[BuildOptions], int]
+    clean: Callable[[CleanOptions], int]
+    new: Callable[[NewOptions], int]
+    serve: Callable[[ServeOptions], int]
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
+
+
+def _port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError as exc:  # argparse turns ArgumentTypeError into usage
+        raise argparse.ArgumentTypeError("port must be an integer") from exc
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return port
+
+
+def build_parser(version: str = "unknown") -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="byggleaf",
+        description=(
+            "No JS & No shit. A benevolent dictator for your digital garden."
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"ByggLeaf {version}",
+        help="show the version and exit",
+    )
+
+    subparsers = parser.add_subparsers(dest="command", metavar="COMMAND")
+
+    init_parser = subparsers.add_parser(
+        "init",
+        help="create a garden in the current directory",
+        description="Create the opinionated ByggLeaf workspace in the current directory.",
+    )
+    init_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="overwrite files generated by a previous init",
+    )
+
+    subparsers.add_parser(
+        "build",
+        help="render content/ into public/",
+        description="Read byggleaf.toml and content/, then render public/.",
+    )
+
+    subparsers.add_parser(
+        "clean",
+        help="delete the generated public/ directory",
+        description="Remove public/ only; source content and assets are untouched.",
+    )
+
+    new_parser = subparsers.add_parser(
+        "new",
+        help="create a new content file from the packaged template",
+        description="Create new content under content/ without overwriting existing files.",
+    )
+    new_parser.add_argument(
+        "kind",
+        choices=("content",),
+        help="what to create (currently: content)",
+    )
+
+    serve_parser = subparsers.add_parser(
+        "serve",
+        help="preview public/ on port 6789",
+        description=(
+            "Serve the already-built public/ directory over HTTP. "
+            "The default bind address is loopback only."
+        ),
+    )
+    serve_parser.add_argument(
+        "--bind",
+        "--host",
+        dest="host",
+        default=DEFAULT_HOST,
+        metavar="ADDRESS",
+        help=(
+            "address to bind (default: 127.0.0.1; "
+            "use 0.0.0.0 to expose the preview on the LAN)"
+        ),
+    )
+    serve_parser.add_argument(
+        "--port",
+        "-p",
+        type=_port,
+        default=DEFAULT_PORT,
+        help="port to bind (default: 6789)",
+    )
+
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Dispatch
+# ---------------------------------------------------------------------------
+
+
+def main(
+    argv: Sequence[str] | None = None,
+    *,
+    handlers: Handlers | None = None,
+    version: str = "unknown",
+) -> int:
+    """Parse ``argv`` and dispatch to injected application handlers.
+
+    The version is injected by :mod:`byggleaf.app` as well; the command line
+    never imports core.  When called directly without the assembly layer it
+    fails politely instead of creating a hidden dependency.
+    """
+
+    parser = build_parser(version)
+    args = parser.parse_args(argv)
+
+    if args.command is None:
+        parser.print_help()
+        return 0
+
+    if handlers is None:
+        Console(stream=sys.stderr).error(
+            "application assembly missing; run ByggLeaf through byggleaf.app"
+        )
+        return 2
+
+    root = Path.cwd()
+
+    try:
+        if args.command == "init":
+            return handlers.init(InitOptions(root=root, force=args.force))
+        if args.command == "build":
+            return handlers.build(BuildOptions(root=root))
+        if args.command == "clean":
+            return handlers.clean(CleanOptions(root=root))
+        if args.command == "new":
+            return handlers.new(NewOptions(root=root, kind=args.kind))
+        if args.command == "serve":
+            return handlers.serve(
+                ServeOptions(root=root, host=args.host, port=args.port)
+            )
+    except KeyboardInterrupt:
+        # Ctrl+C is an ordinary way to leave a preview server, not an error.
+        Console(stream=sys.stderr).muted("stopped.")
+        return 130
+    except BrokenPipeError:
+        return 0
+
+    parser.error(f"unknown command: {args.command}")
+    return 2  # pragma: no cover - argparse.error always raises

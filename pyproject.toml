@@ -1,0 +1,81 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "byggleaf"
+version = "0.1.0"
+description = "No JS & No shit. A benevolent dictator for your digital garden."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "ByggLeaf" }]
+keywords = ["static-site-generator", "markdown", "minimal", "digital-garden"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: WWW/HTTP :: Site Management",
+]
+# Deliberately tiny. Every dependency is a liability.
+dependencies = [
+    "markdown>=3.5,<4",
+    "jinja2>=3.1,<4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2",
+    "coverage[toml]>=7.6",
+    "mypy>=1.10",
+    "ruff>=0.8",
+    "twine>=5",
+]
+
+[project.scripts]
+byggleaf = "byggleaf.app:main"
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["byggleaf*"]
+
+# assets/, templates/ and resources/ are data, never importable Python packages.
+# Declaring them explicitly keeps wheels and sdists complete.
+[tool.setuptools.package-data]
+byggleaf = [
+    "assets/css/*.css",
+    "assets/img/*",
+    "templates/*.html",
+    "resources/*.toml",
+    "resources/*.md",
+    "locales/*.toml",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["byggleaf"]
+check_untyped_defs = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.coverage.run]
+source = ["byggleaf"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+fail_under = 80
