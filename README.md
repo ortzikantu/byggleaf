@@ -460,6 +460,105 @@ CI 在 Python 3.11 与 3.13 上运行同一套门禁，见
 - `byggleaf clean` 删除 `public/`，且不会跟随符号链接
 - 构建路由、文章排序、隐藏页面、favicon 行为等端到端结果
 
+## 部署到 GitHub Pages
+
+下面这份工作流是给**你的站点仓库**用的，不放在 ByggLeaf 源码仓库里。把它保存为
+站点仓库的 `.github/workflows/pages.yml`。
+
+在站点仓库的 GitHub 设置中启用：
+
+```text
+Settings -> Pages -> Build and deployment -> Source: GitHub Actions
+```
+
+```yaml
+name: pages
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install ByggLeaf
+        run: python -m pip install byggleaf
+
+      - name: Build with Pages baseurl
+        run: |
+          set -euo pipefail
+
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          if [ "$REPO_NAME" = "${GITHUB_REPOSITORY_OWNER}.github.io" ]; then
+            BASEURL="https://${GITHUB_REPOSITORY_OWNER}.github.io"
+          else
+            BASEURL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}"
+          fi
+
+          python - "$BASEURL" <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          path = Path("byggleaf.toml")
+          text = path.read_text(encoding="utf-8")
+          text, count = re.subn(
+              r'(?m)^baseurl\s*=\s*.*$',
+              f'baseurl = "{sys.argv[1]}"',
+              text,
+              count=1,
+          )
+          if count != 1:
+              raise SystemExit("byggleaf.toml: baseurl not found")
+          path.write_text(text, encoding="utf-8")
+          PY
+
+          byggleaf build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+```
+
+工作流会自动把 `baseurl` 设为项目页地址：
+
+```text
+https://<owner>.github.io/<repo>
+```
+
+如果仓库名是 `<owner>.github.io`，则自动使用：
+
+```text
+https://<owner>.github.io
+```
+
+使用自定义域名时，把脚本中的 `BASEURL` 改成你的域名即可。
+
 ## 发布流程
 
 发布是 **tag 驱动** 的持续交付，不提供本地发布脚本。仓库收到 tag push 后自行完成
