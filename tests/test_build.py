@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -105,6 +106,16 @@ class BuildTests(unittest.TestCase):
         self.assertIsNotNone(match)
         return match.group(1)
 
+    def example_project_name(self) -> str:
+        """The first project name shipped in the packaged example config."""
+
+        data = tomllib.loads(
+            (ROOT / "byggleaf/resources/config.example.toml").read_text(
+                encoding="utf-8"
+            )
+        )
+        return str(data["projects"][0]["name"])
+
     def write_post(self, name: str, title: str, date: str, body: str = "Body.") -> None:
         path = self.root / "content" / "posts" / name
         path.write_text(
@@ -156,7 +167,7 @@ class BuildTests(unittest.TestCase):
         )
         self.assertIn('href="https://example.com/about/"', home)
         self.assertNotIn(">Posts</a>", home)
-        self.assertIn("Lemovind", home)
+        self.assertIn(self.example_project_name(), home)
         self.assertIn("Hello, World", home)
         self.assertNotIn("https://example.com/statement/", home)
         self.assertNotIn("<script", home.lower())
@@ -235,7 +246,7 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn("April", second)
         self.assertIn('href="https://example.com/" rel="prev"', second)
         self.assertIn('href="https://example.com/page/3/" rel="next"', second)
-        self.assertNotIn("Lemovind", second)
+        self.assertNotIn(self.example_project_name(), second)
 
         self.assertIn("Hello, World", third)
         self.assertIn('href="https://example.com/page/2/" rel="prev"', third)

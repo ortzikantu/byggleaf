@@ -9,6 +9,6 @@ language = "zh-CN"
 posts_per_page = 5
 
 [[projects]]
-name = "Lemovind"
-url = "https://github.com/example/lemovind"
-description = "Dynamic blog in Rust."
+name = "Example"
+url = "https://github.com/example/example"
+description = "Example."
