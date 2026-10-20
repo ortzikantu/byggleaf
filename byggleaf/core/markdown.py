@@ -118,7 +118,11 @@ class _Sanitizer(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.baseurl = baseurl
         self._chunks: list[str] = []
-        self._skip_tag: str | None = None
+        # A stack rather than a single tag name: nested blocked tags such as
+        # "<script><script>x</script>y</script>" must not end the skip mode
+        # early and leak the text between the inner tags.  Mismatched end tags
+        # never pop the stack.
+        self._skip_stack: list[str] = []
 
     def _attributes(self, attrs: list[tuple[str, str | None]]) -> str:
         rendered: list[str] = []
@@ -144,11 +148,11 @@ class _Sanitizer(HTMLParser):
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         lowered = tag.lower()
-        if self._skip_tag is not None:
-            return
         if lowered in _BLOCKED_TAGS:
             if lowered not in _BLOCKED_VOID_TAGS:
-                self._skip_tag = lowered
+                self._skip_stack.append(lowered)
+            return
+        if self._skip_stack:
             return
         self._chunks.append(f"<{lowered}{self._attributes(attrs)}>")
 
@@ -156,22 +160,22 @@ class _Sanitizer(HTMLParser):
         self, tag: str, attrs: list[tuple[str, str | None]]
     ) -> None:
         lowered = tag.lower()
-        if self._skip_tag is not None or lowered in _BLOCKED_TAGS:
+        if self._skip_stack or lowered in _BLOCKED_TAGS:
             return
         self._chunks.append(f"<{lowered}{self._attributes(attrs)}>")
 
     def handle_endtag(self, tag: str) -> None:
         lowered = tag.lower()
-        if self._skip_tag is not None:
-            if lowered == self._skip_tag:
-                self._skip_tag = None
-            return
         if lowered in _BLOCKED_TAGS:
+            if self._skip_stack and lowered == self._skip_stack[-1]:
+                self._skip_stack.pop()
+            return
+        if self._skip_stack:
             return
         self._chunks.append(f"</{lowered}>")
 
     def handle_data(self, data: str) -> None:
-        if self._skip_tag is None:
+        if not self._skip_stack:
             self._chunks.append(html.escape(data, quote=False))
 
     def result(self) -> str:

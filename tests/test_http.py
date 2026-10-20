@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import re
+import socket
 import tempfile
 import threading
 import unittest
 import urllib.request
 from pathlib import Path
+from unittest import mock
 from urllib.parse import urlparse
 
 from byggleaf.core import scaffold
@@ -82,6 +84,100 @@ class HttpSmokeTests(unittest.TestCase):
                 httpd.shutdown()
                 httpd.server_close()
                 thread.join(timeout=5)
+
+
+class ServerErrorPathTests(unittest.TestCase):
+    def test_busy_port_raises_server_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            blocker = socket.socket()
+            try:
+                blocker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                blocker.bind(("127.0.0.1", 0))
+                blocker.listen(1)
+                port = blocker.getsockname()[1]
+                with self.assertRaises(ServerError):
+                    make_server(Path(directory), host="127.0.0.1", port=port)
+            finally:
+                blocker.close()
+
+
+class _StubHttpServer:
+    """A stand-in for ThreadingHTTPServer used to test serve()'s URL logic."""
+
+    def __init__(self, host: str, port: int) -> None:
+        self.server_address = (host, port)
+        self.served = False
+
+    def __enter__(self) -> _StubHttpServer:
+        return self
+
+    def __exit__(self, *exc: object) -> bool:
+        return False
+
+    def serve_forever(self) -> None:
+        self.served = True
+
+
+class ServeWrapperTests(unittest.TestCase):
+    def test_serve_serves_requests_and_reports_the_bound_url(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "index.html").write_text(
+                "<p>preview works</p>", encoding="utf-8"
+            )
+            real = make_server(root, host="127.0.0.1", port=0)
+            observed: dict[str, object] = {}
+
+            def on_ready(url: str) -> None:
+                observed["url"] = url
+
+                def probe_then_stop() -> None:
+                    with urllib.request.urlopen(url, timeout=5) as response:
+                        observed["status"] = response.status
+                        observed["body"] = response.read().decode("utf-8")
+                    real.shutdown()
+
+                threading.Thread(target=probe_then_stop, daemon=True).start()
+
+            with mock.patch(
+                "byggleaf.core.server.make_server",
+                side_effect=lambda *args, **kwargs: real,
+            ):
+                serve(root, host="127.0.0.1", port=0, on_ready=on_ready)
+
+            self.assertEqual(
+                observed["url"],
+                f"http://127.0.0.1:{real.server_address[1]}/",
+            )
+            self.assertEqual(observed["status"], 200)
+            self.assertIn("preview works", str(observed["body"]))
+
+    def test_wildcard_and_ipv6_hosts_get_a_reachable_display_url(self) -> None:
+        cases = (
+            ("0.0.0.0", "127.0.0.1"),
+            ("::", "127.0.0.1"),
+            ("::1", "[::1]"),
+            ("127.0.0.1", "127.0.0.1"),
+        )
+        stubs: list[_StubHttpServer] = []
+
+        def stub_factory(directory, *, host, port):
+            stub = _StubHttpServer(host, port)
+            stubs.append(stub)
+            return stub
+
+        for host, display in cases:
+            with self.subTest(host=host):
+                seen: list[str] = []
+                with mock.patch(
+                    "byggleaf.core.server.make_server",
+                    side_effect=stub_factory,
+                ):
+                    serve(Path("."), host=host, port=6789, on_ready=seen.append)
+                self.assertEqual(seen, [f"http://{display}:6789/"])
+
+        self.assertEqual(len(stubs), len(cases))
+        self.assertTrue(all(stub.served for stub in stubs))
 
 
 if __name__ == "__main__":  # pragma: no cover
