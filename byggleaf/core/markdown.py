@@ -515,6 +515,10 @@ def render_page(
     path = Path(path)
     try:
         text = path.read_text(encoding="utf-8")
+        if text.startswith("\ufeff"):
+            # Match _split_front_matter: a UTF-8 BOM must not defeat the
+            # leading-heading detection or leak into the rendered body.
+            text = text[1:]
     except (OSError, UnicodeError) as exc:
         raise MarkdownError(f"cannot read {path}: {exc}") from exc
 

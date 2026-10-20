@@ -188,6 +188,13 @@ class MarkdownTests(unittest.TestCase):
         self.assertIn("We build things.", page.html)
         self.assertEqual(page.summary, "We build things.")
 
+    def test_utf8_bom_does_not_defeat_the_page_title(self) -> None:
+        path = self.write("# About Me\n\nText.\n", "index.md")
+        path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
+        page = render_page(path, route="about")
+        self.assertEqual(page.title, "About Me")
+        self.assertNotIn("\ufeff", page.html)
+
     def test_summary_is_shortened_on_a_boundary(self) -> None:
         source = " ".join(["word"] * 100)
         fragment = render_markdown(source)
