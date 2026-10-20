@@ -129,11 +129,13 @@ class BuildTests(unittest.TestCase):
 
         for relative in (
             "index.html",
+            "404.html",
             "posts/hello-world/index.html",
             "about/index.html",
             "statement/index.html",
             "assets/css/style.css",
             "assets/img/favicon.ico",
+            "robots.txt",
             "sitemap.xml",
             "rss.xml",
         ):
@@ -392,6 +394,75 @@ class BuildTests(unittest.TestCase):
         self.assertIn('href="/assets/css/style.css"', home)
         self.assertIn('href="/posts/hello-world/"', home)
         self.assertEqual(self.back_link("hello-world"), "/")
+
+    def test_robots_txt_points_to_the_sitemap(self) -> None:
+        self.build()
+        robots = self.read("robots.txt")
+        self.assertIn("User-agent: *", robots)
+        self.assertIn("Allow: /", robots)
+        self.assertIn("Sitemap: https://example.com/sitemap.xml", robots)
+
+    def test_robots_txt_omits_the_sitemap_line_without_baseurl(self) -> None:
+        config_path = self.root / "byggleaf.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8").replace(
+                'baseurl = "https://example.com"', 'baseurl = ""'
+            ),
+            encoding="utf-8",
+        )
+        self.build()
+        robots = self.read("robots.txt")
+        self.assertIn("User-agent: *", robots)
+        self.assertNotIn("Sitemap:", robots)
+
+    def test_404_page_is_localized_and_kept_out_of_the_sitemap(self) -> None:
+        self.build()
+        page = self.read("404.html")
+        self.assertIn("Page not found", page)
+        self.assertIn("The page you are looking for does not exist.", page)
+        self.assertIn('href="https://example.com/"', page)
+        self.assertNotIn("404.html", self.read("sitemap.xml"))
+
+    def test_404_page_follows_the_site_language(self) -> None:
+        self.set_language("zh-CN")
+        self.build()
+        self.assertIn("页面未找到", self.read("404.html"))
+
+    def test_rss_escapes_special_characters(self) -> None:
+        post = self.root / "content/posts/weird.md"
+        post.write_text(
+            '+++\n'
+            'title = "A & B <C> \\"D\\""\n'
+            "date = 2026-01-01\n"
+            'author = "O\'Reilly & Sons"\n'
+            "+++\n\nBody.\n",
+            encoding="utf-8",
+        )
+        self.build()
+        rss = self.read("rss.xml")
+        self.assertIn(
+            "<title>A &amp; B &lt;C&gt; &quot;D&quot;</title>", rss
+        )
+        self.assertIn(
+            "<dc:creator>O'Reilly &amp; Sons</dc:creator>", rss
+        )
+
+    def test_non_ascii_slug_is_percent_encoded_in_urls_but_built_on_disk(
+        self,
+    ) -> None:
+        post = self.root / "content/posts/你好.md"
+        post.write_text(
+            '+++\ntitle = "你好"\ndate = 2026-01-01\n+++\n\nBody.\n',
+            encoding="utf-8",
+        )
+        self.build()
+        self.assertTrue(
+            (self.root / "public/posts/你好/index.html").is_file()
+        )
+        home = self.read("index.html")
+        self.assertIn(
+            'href="https://example.com/posts/%E4%BD%A0%E5%A5%BD/"', home
+        )
 
     def test_stale_output_is_removed(self) -> None:
         stale = self.root / "public/stale.html"

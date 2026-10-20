@@ -241,6 +241,7 @@ class StaticAssetTests(unittest.TestCase):
     def test_templates_stay_flat_and_simply_named(self) -> None:
         expected = {
             "base.html",
+            "404.html",
             "home.html",
             "page.html",
             "post.html",

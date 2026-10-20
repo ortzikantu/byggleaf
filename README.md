@@ -13,7 +13,7 @@ ByggLeaf 是一个极致克制、有主见的静态网站生成器。你写 Mark
 - 所有资源链接统一由 `baseurl` 拼接
 - 页面 `<head>` 输出版本化 generator，页脚输出版本化 Built with
 - 内置英语、日语、韩语、粤语、简体中文、繁体中文界面
-- 自动生成 `sitemap.xml` 与 `rss.xml`
+- 自动生成 `sitemap.xml`、`rss.xml`、`robots.txt` 与本地化 `404.html`
 
 ## 项目边界
 
@@ -202,6 +202,21 @@ public/rss.xml
 - RSS/sitemap 中的站点链接同样由 `baseurl` 拼接。发布 RSS 时请把
   `baseurl` 设为真实的绝对地址。
 
+### robots.txt 与 404 页面
+
+每次构建还会生成：
+
+```text
+public/robots.txt
+public/404.html
+```
+
+- `robots.txt` 允许全部爬虫；`baseurl` 非空时指向 sitemap 的绝对地址，
+  为空（纯本地预览）时省略 Sitemap 行。
+- `404.html` 是本地化的「页面未找到」页面，沿用统一的头部、导航与页脚，
+  不会进入 sitemap。多数静态托管（如 GitHub Pages）会自动把它用作错误页；
+  本地 `byggleaf serve` 也会把缺失路径回退到它并返回真实的 404 状态码。
+
 ### 独立页面
 
 除 `posts/` 外，任何包含 `index.md` 的文件夹都会生成
@@ -293,6 +308,7 @@ app.py  ──>  cli.py
 ```text
 templates/
 ├── base.html      # 页面骨架 + head + 导航 + footer
+├── 404.html       # 本地化「页面未找到」
 ├── home.html      # 首页（文章流 + 分页）
 ├── post.html      # 文章详情
 ├── page.html      # about/statement 等独立页面
@@ -304,8 +320,8 @@ templates/
 - 多词命名统一用下划线；当前这组模板都是单词，不需要再制造复合词。
 - `base.html` 拥有 head、导航和 footer。它们永远一起变化，拆成多个 partial
   只会增加跳转成本。
-- `base.html`、`home.html`、`post.html`、`page.html`、`postlist.html` 全部平铺，
-  没有模板子目录，也没有用户可以覆盖的布局层。Jinja 只加载包内模板。
+- `base.html`、`404.html`、`home.html`、`post.html`、`page.html`、`postlist.html`
+  全部平铺，没有模板子目录，也没有用户可以覆盖的布局层。Jinja 只加载包内模板。
 
 ### 界面语言
 
@@ -363,7 +379,7 @@ Add locales/zh-SG.toml or contribute a translation.
 补齐全部 `[ui]` key，再更新本表和测试即可。详见
 [CONTRIBUTING.md](CONTRIBUTING.md#localization)。
 
-翻译覆盖导航、跳到正文链接、段落标题、分页按钮、更新时间、页脚、ARIA 标签等
+翻译覆盖导航、跳到正文链接、段落标题、分页按钮、更新时间、页脚、404 文案、ARIA 标签等
 页面 UI，不翻译文章正文和站点配置。
 
 生成页面会包含：
@@ -459,7 +475,7 @@ CI 在 Python 3.11 与 3.13 上运行同一套门禁，见
 - `new content` 从包内模板生成文章并自动写入日期时间
 - 文章 SEO 使用首页同款摘要、可选作者和 tags
 - 所有页面都有 canonical、OG、description 和 feed 发现链接
-- 构建生成 sitemap.xml 与 rss.xml
+- 构建生成 sitemap.xml、rss.xml、robots.txt 与本地化 404 页面
 - 构建先预检全部内容和模板，再进入 staging；失败时旧 `public/` 保留
 - 输出路径冲突在预检阶段报错
 - 发布失败恢复旧 `public/`；下一次构建恢复崩溃残留

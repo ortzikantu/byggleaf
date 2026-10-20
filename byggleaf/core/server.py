@@ -7,10 +7,13 @@ concern (``app.py`` turns it into a calm exit).
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from io import BytesIO
 from pathlib import Path
+from typing import BinaryIO
 
 
 class ServerError(RuntimeError):
@@ -24,11 +27,31 @@ DEFAULT_PORT = 6789
 
 
 class _PreviewHandler(SimpleHTTPRequestHandler):
-    """A plain file server that politely refuses to cache during preview."""
+    """A plain file server that refuses to cache during preview.
+
+    Missing paths fall back to the built ``404.html`` — with a real 404
+    status — so the preview behaves like the static hosts the site is meant
+    for.
+    """
 
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
+
+    def send_response(self, code: int, message: str | None = None) -> None:
+        if getattr(self, "_serving_custom_404", False):
+            code = 404
+        super().send_response(code, message)
+
+    def send_head(self) -> BytesIO | BinaryIO | None:
+        self._serving_custom_404 = False
+        target = self.translate_path(self.path)
+        if not os.path.exists(target):
+            fallback = os.path.join(self.directory, "404.html")
+            if os.path.isfile(fallback):
+                self.path = "/404.html"
+                self._serving_custom_404 = True
+        return super().send_head()
 
 
 def make_server(

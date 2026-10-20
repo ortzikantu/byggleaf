@@ -36,6 +36,19 @@ def _rfc822(value: DateValue) -> str:
     return format_datetime(_rss_datetime(value), usegmt=True)
 
 
+def render_robots(config: Config) -> str:
+    """Render a minimal robots.txt: crawl everything, point to the sitemap.
+
+    The Sitemap line requires an absolute URL, so it is omitted when
+    ``baseurl`` is empty (root-relative local previews).
+    """
+
+    lines = ["User-agent: *", "Allow: /", ""]
+    if config.site.baseurl:
+        lines.append(f"Sitemap: {config.site.url('/sitemap.xml')}")
+    return "\n".join(lines) + "\n"
+
+
 def render_sitemap(config: Config, entries: list[SitemapEntry]) -> str:
     """Render a deterministic sitemap in sitemaps.org XML format."""
 
@@ -110,4 +123,4 @@ def render_rss(
     return "\n".join(lines) + "\n"
 
 
-__all__ = ["SitemapEntry", "render_rss", "render_sitemap"]
+__all__ = ["SitemapEntry", "render_robots", "render_rss", "render_sitemap"]

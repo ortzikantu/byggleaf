@@ -22,6 +22,7 @@ Routing contract:
 * ``content/<any>/index.md``                 -> ``/<any>/``
 * ``content/posts/**`` is never a custom page
 * Home is generated at ``/`` and is not sourced from content.
+* ``/404.html`` (localized error page) and ``/robots.txt`` are always emitted.
 
 Custom pages are intentionally invisible: they never enter the navbar.
 """
@@ -40,7 +41,7 @@ from .config import Config
 from .jinja import TemplateEngine
 from .locales import Locale, load_locale
 from .markdown import Page, Post, parse_post, render_page
-from .seo import SitemapEntry, render_rss, render_sitemap
+from .seo import SitemapEntry, render_robots, render_rss, render_sitemap
 
 PACKAGE_ASSETS = Path(__file__).resolve().parent.parent / "assets"
 USER_ASSET_DIRECTORIES = ("img", "video", "audio")
@@ -482,6 +483,32 @@ class Builder:
                 )
             )
             sitemap_entries.append(SitemapEntry(path=page.url))
+
+        # The error page is a real document (same chrome, localized copy), but
+        # it is deliberately not a sitemap entry: crawlers should not list it.
+        files.append(
+            OutputFile(
+                relative_path=Path("404.html"),
+                content=self.templates.render(
+                    "404.html",
+                    nav=self._nav(None),
+                    favicon=favicon,
+                    meta_title=(
+                        f"{self.locale.text('not_found')} · {site.title}"
+                    ),
+                    meta_description=self.locale.text("not_found_hint"),
+                    canonical_path="/404.html",
+                    og_type="website",
+                ),
+            )
+        )
+
+        files.append(
+            OutputFile(
+                relative_path=Path("robots.txt"),
+                content=render_robots(self.config),
+            )
+        )
 
         files.append(
             OutputFile(

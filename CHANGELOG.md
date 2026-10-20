@@ -4,6 +4,12 @@
 
 ## 未发布
 
+### 新增
+
+- 每次构建生成 `robots.txt`（允许全部爬虫；`baseurl` 非空时指向 sitemap 绝对地址）。
+- 每次构建生成本地化 `404.html`（沿用统一头部/导航/页脚，不进 sitemap）；
+  `byggleaf serve` 对缺失路径回退到它并返回真实 404 状态码。
+
 ### 修复
 
 - `byggleaf --version` 与 `--help` 不再依赖已安装的第三方包：

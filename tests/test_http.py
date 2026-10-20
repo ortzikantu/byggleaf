@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import http.client
 import re
 import socket
 import tempfile
@@ -119,6 +120,48 @@ class _StubHttpServer:
 
 
 class ServeWrapperTests(unittest.TestCase):
+    def test_missing_paths_serve_the_built_404_page_with_status_404(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold.init_site(root)
+            Builder(root, load_config(root / "byggleaf.toml")).build()
+
+            httpd = make_server(root / "public", host="127.0.0.1", port=0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            port = httpd.server_address[1]
+            try:
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1", port, timeout=5
+                )
+                try:
+                    connection.request("GET", "/definitely-missing/")
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 404)
+                    body = response.read().decode("utf-8")
+                finally:
+                    connection.close()
+                # The default scaffold config is zh-CN.
+                self.assertIn("页面未找到", body)
+                self.assertIn("<html", body)
+
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/robots.txt", timeout=5
+                ) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn(
+                        "User-agent: *", response.read().decode("utf-8")
+                    )
+
+                with urllib.request.urlopen(
+                    f"http://127.0.0.1:{port}/404.html", timeout=5
+                ) as response:
+                    self.assertEqual(response.status, 200)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join(timeout=5)
+
     def test_serve_serves_requests_and_reports_the_bound_url(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

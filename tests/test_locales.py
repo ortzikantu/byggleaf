@@ -38,6 +38,16 @@ class LocaleTests(unittest.TestCase):
                 self.assertEqual(locale.language, path.stem)
                 self.assertIsInstance(locale.strings, dict)
 
+    def test_builtin_catalogs_share_the_same_key_set(self) -> None:
+        catalogs = {
+            path.stem: set(load_locale(path.stem).strings)
+            for path in sorted(LOCALES_DIR.glob("*.toml"))
+        }
+        reference = catalogs["en"]
+        for language, keys in catalogs.items():
+            with self.subTest(language=language):
+                self.assertEqual(keys, reference)
+
     def test_missing_catalog_reports_available_files_and_contribution_hint(self) -> None:
         existing = {path.stem for path in LOCALES_DIR.glob("*.toml")}
         tag = next(
