@@ -59,8 +59,8 @@ class LocaleTests(unittest.TestCase):
             "Page 2 of 3",
         )
         self.assertEqual(
-            locale.text("colophon", version="0.1.0"),
-            "Built with ByggLeaf 0.1.0. No JavaScript, no tracking.",
+            locale.text("colophon", version="v0.1.0"),
+            "Built with ByggLeaf v0.1.0. No JavaScript, no tracking.",
         )
 
     def test_missing_key_displays_the_key_name(self) -> None:

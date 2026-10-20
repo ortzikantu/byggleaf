@@ -369,13 +369,13 @@ Add locales/zh-SG.toml or contribute a translation.
 生成页面会包含：
 
 ```html
-<meta name="generator" content="ByggLeaf 0.1.0">
+<meta name="generator" content="ByggLeaf v0.1.0">
 ```
 
 以及 footer：
 
 ```html
-<p class="colophon">Built with ByggLeaf 0.1.0. No JavaScript, no tracking.</p>
+<p class="colophon">Built with ByggLeaf v0.1.0. No JavaScript, no tracking.</p>
 ```
 
 版本号直接来自当前的 `pyproject.toml`，不维护第二份字面量。
@@ -574,7 +574,7 @@ https://<owner>.github.io
 2. 手动创建并推送 tag：
 
 ```bash
-git tag -a v0.1.0 -m "ByggLeaf 0.1.0"
+git tag -a v0.1.0 -m "ByggLeaf v0.1.0"
 git push origin v0.1.0
 ```
 

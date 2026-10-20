@@ -14,6 +14,12 @@
 - 补充 server / app / version 低覆盖模块的测试与 HTML 消毒器边界测试。
 - CI 与发布流程的 wheel 冒烟改在无第三方依赖的全新 venv 中执行。
 
+### 变更
+
+- 版本展示统一带 `v` 前缀（`ByggLeaf v0.1.0`）：页脚、generator meta、RSS
+  与 `--version` 输出一致；`core/version.py` 收敛为
+  「源码 pyproject → 发行 metadata → `0.0.0`」三级回退。
+
 ## 0.1.0
 
 初始发布：Markdown 文章与独立页面、分页、固定模板、原生 CSS、零 JavaScript、

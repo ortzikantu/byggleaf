@@ -1,63 +1,90 @@
 """The single source of truth for ByggLeaf's version.
 
-In a source checkout (and in an editable install) the version is read directly
-from ``pyproject.toml`` with :mod:`tomllib`.  A wheel does not ship the
-project's pyproject file, so the generated distribution metadata is used as a
-fallback; that metadata is itself produced from the same pyproject version.
+``raw_version()`` is the PEP 440 version (``0.1.0``); ``get_version()`` is the
+display form (``v0.1.0``) used by the CLI, the generator meta, the RSS feed
+and the footer.
 
-Keeping this in ``core`` means the CLI, templates and package root can all
-consume one value without duplicating a literal version string.
+Resolution order: a source checkout (including ``pip install -e .``) reads the
+project's own ``pyproject.toml``, so a bumped version applies immediately; a
+wheel has no readable pyproject and falls back to ``importlib.metadata``; if
+both fail the placeholder ``0.0.0`` keeps rendering alive — a cosmetic value
+must never break the site.
 """
 
 from __future__ import annotations
 
 import tomllib
-from functools import lru_cache
-from importlib.metadata import PackageNotFoundError
-from importlib.metadata import version as distribution_version
 from pathlib import Path
 
-PACKAGE_NAME = "byggleaf"
-_FALLBACK_VERSION = "0.0.0"
+#: Distribution name, matching ``[project].name`` in ``pyproject.toml``.
+DISTRIBUTION = "byggleaf"
+_FALLBACK = "0.0.0"
 
-# A source checkout is exactly two levels above core/version.py.
-_SOURCE_PYPROJECT = Path(__file__).resolve().parents[2] / "pyproject.toml"
-
-
-def _read_pyproject_version(path: Path) -> str | None:
-    """Return ``[project].version`` for ByggLeaf, or None if not applicable."""
-
-    try:
-        data = tomllib.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, tomllib.TOMLDecodeError):
-        return None
-
-    project = data.get("project")
-    if not isinstance(project, dict) or project.get("name") != PACKAGE_NAME:
-        return None
-    value = project.get("version")
-    if not isinstance(value, str) or not value.strip():
-        return None
-    return value.strip()
+_cache: str | None = None
 
 
-@lru_cache(maxsize=1)
-def get_version() -> str:
-    """Resolve the version once, preferring the source pyproject file."""
+def _installed_version() -> str:
+    """The installed distribution's version, or "" when unavailable or broken."""
 
-    if _SOURCE_PYPROJECT.is_file():
-        source_version = _read_pyproject_version(_SOURCE_PYPROJECT)
-        if source_version is not None:
-            return source_version
+    from importlib.metadata import PackageNotFoundError, version
 
     try:
-        return distribution_version(PACKAGE_NAME)
+        return str(version(DISTRIBUTION) or "").strip()
     except PackageNotFoundError:
-        # A source tree without installation metadata is still usable; an
-        # explicit fallback keeps rendering from failing over a cosmetic value.
-        return _FALLBACK_VERSION
+        return ""
+    except Exception:  # corrupt metadata must not break the site
+        return ""
+
+
+def _source_version(start: Path | None = None) -> str:
+    """Walk up from this file to the nearest *ByggLeaf* pyproject.
+
+    Only a pyproject whose ``[project].name`` equals ``DISTRIBUTION`` counts:
+    a venv created inside some other project's tree must not donate its
+    version number.
+    """
+
+    base = (start or Path(__file__).resolve().parent).resolve()
+    for candidate in (base, *base.parents):
+        pyproject = candidate / "pyproject.toml"
+        if not pyproject.is_file():
+            continue
+        try:
+            with pyproject.open("rb") as handle:
+                data = tomllib.load(handle)
+        except (OSError, tomllib.TOMLDecodeError):
+            continue
+        project = data.get("project") or {}
+        if str(project.get("name") or "").strip().lower() != DISTRIBUTION:
+            continue
+        value = str(project.get("version") or "").strip()
+        if value:
+            return value
+    return ""
+
+
+def raw_version() -> str:
+    """The PEP 440 version, resolved once per process."""
+
+    global _cache
+    if _cache is None:
+        _cache = _source_version() or _installed_version() or _FALLBACK
+    return _cache
+
+
+def get_version() -> str:
+    """The display version (``v0.1.0``)."""
+
+    return f"v{raw_version()}"
+
+
+def reset_cache() -> None:
+    """Drop the cached version (tests use it when switching install state)."""
+
+    global _cache
+    _cache = None
 
 
 VERSION = get_version()
 
-__all__ = ["VERSION", "get_version"]
+__all__ = ["VERSION", "get_version", "raw_version", "reset_cache"]
