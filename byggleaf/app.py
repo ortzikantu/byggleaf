@@ -7,6 +7,12 @@ dependency graph pointing in one direction.
 
 The installed ``byggleaf`` console script lands here.  There is deliberately
 no package-level ``__main__.py``: one entry point is enough.
+
+Core services that pull in third-party packages are imported inside the
+command handlers rather than at module top.  ``core/version.py`` is
+standard-library only, so ``byggleaf --version`` and ``--help`` still work in
+an environment without ``markdown``/``jinja2`` (for example a wheel installed
+with ``--no-deps`` during the CI smoke test).
 """
 
 from __future__ import annotations
@@ -15,15 +21,6 @@ import sys
 from pathlib import Path
 
 from . import cli
-from .core.builder import Builder, BuildError
-from .core.clean import CleanError, clean_output
-from .core.config import CONFIG_FILENAME, ConfigError, load_config
-from .core.jinja import TemplateError
-from .core.locales import LocaleError
-from .core.markdown import MarkdownError
-from .core.new import NewError, create_article
-from .core.scaffold import ScaffoldError, init_site
-from .core.server import ServerError, serve
 from .core.version import VERSION
 
 
@@ -37,6 +34,8 @@ def _display(path: Path, root: Path) -> str:
 
 
 def _cmd_init(options: cli.InitOptions) -> int:
+    from .core.scaffold import ScaffoldError, init_site
+
     console = cli.Console()
     errors = cli.Console(stream=sys.stderr)
     root = options.root.resolve()
@@ -63,6 +62,8 @@ def _cmd_init(options: cli.InitOptions) -> int:
 
 
 def _cmd_clean(options: cli.CleanOptions) -> int:
+    from .core.clean import CleanError, clean_output
+
     console = cli.Console()
     errors = cli.Console(stream=sys.stderr)
     root = options.root.resolve()
@@ -85,6 +86,8 @@ def _cmd_clean(options: cli.CleanOptions) -> int:
 
 
 def _cmd_new(options: cli.NewOptions) -> int:
+    from .core.new import NewError, create_article
+
     console = cli.Console()
     errors = cli.Console(stream=sys.stderr)
     root = options.root.resolve()
@@ -107,6 +110,12 @@ def _cmd_new(options: cli.NewOptions) -> int:
 
 
 def _cmd_build(options: cli.BuildOptions) -> int:
+    from .core.builder import Builder, BuildError
+    from .core.config import CONFIG_FILENAME, ConfigError, load_config
+    from .core.jinja import TemplateError
+    from .core.locales import LocaleError
+    from .core.markdown import MarkdownError
+
     console = cli.Console()
     errors = cli.Console(stream=sys.stderr)
     root = options.root.resolve()
@@ -148,6 +157,9 @@ def _cmd_build(options: cli.BuildOptions) -> int:
 
 
 def _cmd_serve(options: cli.ServeOptions) -> int:
+    from .core.config import CONFIG_FILENAME, ConfigError, load_config
+    from .core.server import ServerError, serve
+
     console = cli.Console()
     errors = cli.Console(stream=sys.stderr)
     root = options.root.resolve()
