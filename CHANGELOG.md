@@ -2,7 +2,7 @@
 
 本文件记录 ByggLeaf 的重要变更。版本号的唯一来源是 `pyproject.toml`。
 
-## 未发布
+## 0.1.1
 
 ### 新增
 
@@ -17,12 +17,17 @@
 - 修正 README 中关于 `exampleSite/` 的描述（该目录从未随仓库分发）。
 - HTML 消毒器按标签栈深度丢弃嵌套的可执行标签，内部文本不再从
   内层闭合标签处泄漏。
+- 配置层拒绝可执行 URL 方案：`baseurl` 与 `projects[].url` 出现
+  `javascript:` 等方案时在解析阶段报错，守住「生成页面零 JavaScript」的承诺。
+- 版本解析对祖先目录里的陌生/损坏 pyproject 容错，不再因展示信息崩溃站点。
+- 带 UTF-8 BOM 的页面文件不再丢失标题（此前只有文章路径剥 BOM）。
+- `serve` 对路径穿越请求一律 404，并锁定为回归测试。
 - 补充 server / app / version 低覆盖模块的测试与 HTML 消毒器边界测试。
 - CI 与发布流程的 wheel 冒烟改在无第三方依赖的全新 venv 中执行。
 
 ### 变更
 
-- 版本展示统一带 `v` 前缀（`ByggLeaf v0.1.0`）：页脚、generator meta、RSS
+- 版本展示统一带 `v` 前缀（`ByggLeaf v0.1.1`）：页脚、generator meta、RSS
   与 `--version` 输出一致；`core/version.py` 收敛为
   「源码 pyproject → 发行 metadata → `0.0.0`」三级回退。
 

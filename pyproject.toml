@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "byggleaf"
-version = "0.1.0"
+version = "0.1.1"
 description = "No JS & No shit. A benevolent dictator for your digital garden."
 readme = "README.md"
 requires-python = ">=3.11"
