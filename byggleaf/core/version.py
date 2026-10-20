@@ -52,7 +52,10 @@ def _source_version(start: Path | None = None) -> str:
         try:
             with pyproject.open("rb") as handle:
                 data = tomllib.load(handle)
-        except (OSError, tomllib.TOMLDecodeError):
+        except Exception:
+            # Foreign, unreadable, or pathological pyproject files in ancestor
+            # directories (RecursionError on hostile nesting, broken metadata,
+            # ...) must never break the site over a cosmetic value.
             continue
         project = data.get("project") or {}
         if str(project.get("name") or "").strip().lower() != DISTRIBUTION:

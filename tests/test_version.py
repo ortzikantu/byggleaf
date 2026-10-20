@@ -66,6 +66,20 @@ class VersionTests(unittest.TestCase):
         ):
             self.assertEqual(raw_version(), "0.0.0")
 
+    def test_source_version_survives_a_hostile_ancestor_pyproject(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory) / "garden"
+            project.mkdir()
+            (project / "pyproject.toml").write_text(
+                '[project]\nname = "byggleaf"\nversion = "1.2.3"\n',
+                encoding="utf-8",
+            )
+            with mock.patch(
+                "byggleaf.core.version.tomllib.load",
+                side_effect=RuntimeError("pathological pyproject"),
+            ):
+                self.assertEqual(_source_version(start=project), "")
+
     def test_reset_cache_forces_a_fresh_resolution(self) -> None:
         with mock.patch(
             "byggleaf.core.version._source_version", return_value="first"

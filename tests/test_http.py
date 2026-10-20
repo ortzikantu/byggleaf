@@ -120,6 +120,39 @@ class _StubHttpServer:
 
 
 class ServeWrapperTests(unittest.TestCase):
+    def test_path_traversal_requests_are_confined_to_public(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            scaffold.init_site(root)
+            Builder(root, load_config(root / "byggleaf.toml")).build()
+
+            httpd = make_server(root / "public", host="127.0.0.1", port=0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            port = httpd.server_address[1]
+            try:
+                for path in (
+                    "/../../etc/passwd",
+                    "/..%2f..%2fetc%2fpasswd",
+                    "/%2e%2e/%2e%2e/etc/passwd",
+                ):
+                    with self.subTest(path=path):
+                        connection = http.client.HTTPConnection(
+                            "127.0.0.1", port, timeout=5
+                        )
+                        try:
+                            connection.request("GET", path)
+                            response = connection.getresponse()
+                            self.assertEqual(response.status, 404)
+                            body = response.read().decode("utf-8")
+                        finally:
+                            connection.close()
+                        self.assertNotIn("root:", body)
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join(timeout=5)
+
     def test_missing_paths_serve_the_built_404_page_with_status_404(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
