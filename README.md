@@ -74,10 +74,14 @@ byggleaf serve --bind 0.0.0.0
 
 ## 示例站点
 
-仓库内的 `exampleSite/` 已包含 11 篇示例文章，`posts_per_page = 5`，会生成 3 页：
+`byggleaf init` 自带一篇示例文章（`content/posts/hello-world.md`）和
+`about`、`statement` 两个独立页面。用 `byggleaf new content` 再补几篇
+即可体验分页：`posts_per_page = 5`（默认）时，11 篇文章会生成 3 页。
 
 ```bash
-cd exampleSite
+byggleaf init
+byggleaf new content   # 重复执行，凑够想要的文章数
+byggleaf build
 byggleaf serve
 ```
 
@@ -273,6 +277,8 @@ app.py  ──>  cli.py
 ```
 
 - `app.py` 是唯一同时认识 `core` 与 `cli` 的装配点。
+- `app.py` 延迟导入依赖第三方包的 core 服务：`--version` 与 `--help`
+  在没有 `markdown`/`jinja2` 的环境里也能运行。
 - `cli.py` 只定义命令和参数，通过注入的 handlers 调用应用服务，不导入 core。
 - `core/*` 绝不反向导入 `app` 或 `cli`；`scaffold` 也是 core 的普通服务模块。
 - 包内没有 `__main__.py`：唯一入口是安装后的 `byggleaf` console script。
