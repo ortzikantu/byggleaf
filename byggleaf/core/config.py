@@ -7,6 +7,7 @@ dataclasses; templates cannot mutate site settings by accident.
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,6 +16,24 @@ from typing import Any
 from .locales import LocaleError, canonicalize_language
 
 CONFIG_FILENAME = "byggleaf.toml"
+
+# URL schemes that can execute or smuggle code.  The Markdown sanitizer keeps
+# the same list for content; config-owned URLs (baseurl, project links) must
+# not become a back door into the zero-JavaScript promise.
+_UNSAFE_URL_PREFIXES = (
+    "javascript:",
+    "vbscript:",
+    "data:text/html",
+    "data:image/svg",
+)
+_URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
+
+
+def _unsafe_url(value: str) -> bool:
+    """True when a URL would execute code once a browser resolves it."""
+
+    compact = _URL_NOISE_RE.sub("", value).lower()
+    return compact.startswith(_UNSAFE_URL_PREFIXES)
 
 
 class ConfigError(ValueError):
@@ -128,6 +147,8 @@ def load_config(path: Path) -> Config:
     )
     if any(character.isspace() for character in baseurl):
         raise ConfigError("[site].baseurl must not contain whitespace")
+    if _unsafe_url(baseurl):
+        raise ConfigError("[site].baseurl must not be an executable URL scheme")
     # Normalise once.  No template or caller has to think about trailing slashes.
     if baseurl == "/":
         baseurl = ""
@@ -163,6 +184,11 @@ def load_config(path: Path) -> Config:
             item, "name", where=f"projects[{index}]", required=True
         )
         url = _string(item, "url", where=f"projects[{index}]", required=True)
+        if _unsafe_url(url):
+            raise ConfigError(
+                f"{path.name}: projects[{index}].url must not be an "
+                "executable URL scheme"
+            )
         description = _string(item, "description", where=f"projects[{index}]")
         projects.append(Project(name=name, url=url, description=description))
 

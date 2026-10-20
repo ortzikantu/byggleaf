@@ -113,6 +113,35 @@ class ConfigTests(unittest.TestCase):
                 self.write('[site]\ntitle = "Garden"\nbaseurl = "https://example.com/a b"\n')
             )
 
+    def test_baseurl_rejects_executable_schemes(self) -> None:
+        for baseurl in (
+            "javascript:alert(1)",
+            "VBScript:x",
+            "data:text/html,<svg>",
+            "data:image/svg+xml,<svg>",
+        ):
+            with self.subTest(baseurl=baseurl):
+                with self.assertRaisesRegex(ConfigError, "executable"):
+                    load_config(
+                        self.write(
+                            '[site]\ntitle = "Garden"\n'
+                            f'baseurl = "{baseurl}"\n'
+                        )
+                    )
+
+    def test_project_url_rejects_executable_schemes(self) -> None:
+        config = CONFIG.replace(
+            "https://github.com/example/lemovind", "javascript:alert(1)"
+        )
+        with self.assertRaisesRegex(ConfigError, "executable"):
+            load_config(self.write(config))
+
+    def test_ordinary_project_url_schemes_are_accepted(self) -> None:
+        config = load_config(
+            self.write(CONFIG.replace("https://example.com/byggleaf", "mailto:a@example.com"))
+        )
+        self.assertEqual(config.projects[1].url, "mailto:a@example.com")
+
     def test_language_is_canonicalized(self) -> None:
         config = load_config(
             self.write(CONFIG.replace('language = "zh-CN"', 'language = "zh-hk"'))
