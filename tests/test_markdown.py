@@ -1,4 +1,4 @@
-"""Markdown, front matter, sanitisation, and page title behaviour."""
+"""Markdown、front matter、baseurl 重写与页面标题行为。"""
 
 from __future__ import annotations
 
@@ -146,8 +146,8 @@ class MarkdownTests(unittest.TestCase):
             parse_post(path)
 
     def test_raw_html_is_passed_through_unchanged(self) -> None:
-        # ByggLeaf does not filter raw HTML written by the author: the output
-        # is whatever the Markdown renderer produces.
+        # ByggLeaf 不过滤作者写入的原始 HTML：输出就是
+        # Markdown 渲染器产出的内容。
         fragment = render_markdown(
             "<script>alert(1)</script>\n\n"
             '<img src="x" onerror="alert(2)">\n\n'
@@ -220,7 +220,7 @@ class MarkdownTests(unittest.TestCase):
 
 
 class BaseurlUrlTests(unittest.TestCase):
-    """Local URLs follow ``baseurl``; other URLs are left alone."""
+    """本地 URL 跟随 baseurl；其他 URL 保持原样。"""
 
     def test_subpath_baseurl_rewrites_root_relative_links_and_assets(self) -> None:
         fragment = render_markdown(
@@ -261,7 +261,7 @@ class BaseurlUrlTests(unittest.TestCase):
 
 
 class FrontMatterErrorTests(unittest.TestCase):
-    """Front matter validation errors stay explicit and actionable."""
+    """front matter 校验错误应明确且可操作。"""
 
     def setUp(self) -> None:
         self.tempdir = tempfile.TemporaryDirectory()

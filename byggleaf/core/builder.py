@@ -1,29 +1,25 @@
-"""The build orchestrator.
+"""构建编排器。
 
-This is the only core module that knows the shape of a ByggLeaf project:
-``content/`` in, ``public/`` out, with packaged CSS and the user's media
-copied alongside.  It composes the lower-level ``config``, ``markdown``,
-``jinja`` and ``server`` bases without knowing anything about argparse.
+它是唯一知道 ByggLeaf 项目形状的 core 模块：``content/`` 进、``public/`` 出，
+顺带复制包内 CSS 和用户媒体；它组合 config、markdown、jinja、server 这些下层
+模块，但不认识 argparse。
 
-The build is deliberately three readable stages:
+构建刻意分成三个可读阶段：
 
-1. **Preflight** — validate the project, parse every post/page, and render all
-   HTML in memory.  No output path is touched.
-2. **Materialize** — copy assets and write the rendered files into a private
-   hidden staging directory.
-3. **Publish** — swap the finished staging tree into ``public/``, restoring the
-   previous tree if the swap fails.
+1. **预检**：校验项目、解析全部文章/页面、在内存渲染全部 HTML，不碰输出路径。
+2. **落地**：复制资源，把渲染结果写进私有 staging 目录。
+3. **发布**：把完成的 staging 目录切换成 ``public/``，失败就恢复旧树。
 
-Routing contract:
+路由约定：
 
 * ``content/posts/name.md``                  -> ``/posts/name/``
-* ``content/posts/``                         -> ``/posts/`` archive
+* ``content/posts/``                         -> ``/posts/`` 归档
 * ``content/<any>/index.md``                 -> ``/<any>/``
-* ``content/posts/**`` is never a custom page
-* Home is generated at ``/`` and is not sourced from content.
-* ``/404.html`` (localized error page) and ``/robots.txt`` are always emitted.
+* ``content/posts/**`` 永远不是自定义页面
+* 首页由 ``/`` 生成，不来自 content
+* 每次构建都输出 ``/404.html``（本地化错误页）和 ``/robots.txt``
 
-Custom pages are intentionally invisible: they never enter the navbar.
+自定义页面故意不可见，不会进入导航。
 """
 
 from __future__ import annotations
@@ -47,12 +43,12 @@ USER_ASSET_DIRECTORIES = ("img", "video", "audio")
 
 
 class BuildError(RuntimeError):
-    """The project cannot be rendered safely or completely."""
+    """项目无法安全或完整地渲染。"""
 
 
 @dataclass(frozen=True, slots=True)
 class BuildResult:
-    """A factual summary for the CLI, not a logging side effect."""
+    """给 CLI 的事实摘要，而不是日志副作用。"""
 
     output_dir: Path
     posts: int
@@ -64,7 +60,7 @@ class BuildResult:
 
 @dataclass(frozen=True, slots=True)
 class OutputFile:
-    """One fully rendered file waiting to be written."""
+    """一个已渲染完成、等待写入的文件。"""
 
     relative_path: Path
     content: str
@@ -72,10 +68,9 @@ class OutputFile:
 
 @dataclass(frozen=True, slots=True)
 class PreparedSite:
-    """Everything that can fail during content/template processing.
+    """内容/模板处理阶段可能失败的全部产物。
 
-    Building this object touches no output directory.  A failed preflight must
-    leave the previous public/ tree exactly as it was.
+    构建这个对象不碰任何输出目录；预检失败必须让旧 public/ 原样保留。
     """
 
     favicon: str | None
@@ -86,7 +81,7 @@ class PreparedSite:
 
 @dataclass(frozen=True, slots=True)
 class Pagination:
-    """Template-facing pagination state for one home page slice."""
+    """首页某一页的模板分页状态。"""
 
     current_page: int
     total_pages: int
@@ -95,7 +90,7 @@ class Pagination:
 
 
 def _humanize_route(route: str) -> str:
-    """Fallback title for an index.md that starts without an H1."""
+    """index.md 开头没有 H1 时的回退标题。"""
 
     last = route.rsplit("/", 1)[-1] or route
     words = last.replace("_", " ").replace("-", " ").strip()
@@ -103,13 +98,13 @@ def _humanize_route(route: str) -> str:
 
 
 def _pagination_url(page_number: int) -> str:
-    """Page 1 is the home page; later pages use clean /page/n/ URLs."""
+    """第 1 页是首页；后续页使用干净的 /page/n/ URL。"""
 
     return "/" if page_number == 1 else f"/page/{page_number}/"
 
 
 class Builder:
-    """Render one ByggLeaf project rooted at ``root``."""
+    """渲染位于 ``root`` 的一个 ByggLeaf 项目。"""
 
     def __init__(self, root: Path, config: Config) -> None:
         self.root = Path(root).resolve()
@@ -122,7 +117,7 @@ class Builder:
         self._staging_dir: Path | None = None
 
     def _nav(self, active: str | None) -> list[dict[str, object]]:
-        """Exactly two links, localized for the configured language."""
+        """恰好两个链接，按配置语言本地化。"""
 
         return [
             {
@@ -139,33 +134,31 @@ class Builder:
 
     @property
     def _target(self) -> Path:
-        """The private directory currently being rendered into."""
+        """当前正在渲染的私有目录。"""
 
         if self._staging_dir is None:
             raise BuildError("build staging directory is not initialized")
         return self._staging_dir
 
-    # -- public entry point -------------------------------------------------
+    # -- 公共入口 -----------------------------------------------------------
 
     def build(self) -> BuildResult:
         started = time.perf_counter()
 
-        # Recover any temporary trees left by a process killed mid-publish.
+        # 先恢复上一次发布中途被强杀留下的临时目录。
         self._recover_publication()
 
-        # Stage 1: validate and render everything in memory.  No output path is
-        # touched before this succeeds.
+        # 阶段 1：校验并在内存中渲染全部内容；成功之前不触碰任何输出路径。
         prepared = self._preflight()
 
-        # Stage 2: materialise into a private staging tree.  Content and
-        # template failures are already impossible by this point.
+        # 阶段 2：落地到私有 staging 目录；此时内容与模板错误已不可能发生。
         staging = Path(
             tempfile.mkdtemp(prefix=".byggleaf-build-", dir=self.root)
         )
         self._staging_dir = staging
         assets = 0
         try:
-            # mkdtemp creates 0700; published pages should stay world-readable.
+            # mkdtemp 默认 0700；发布出去的页面应保持可读。
             staging.chmod(0o755)
             assets = self._materialize(prepared)
             self._publish(staging)
@@ -189,11 +182,10 @@ class Builder:
         )
 
     def _preflight(self) -> PreparedSite:
-        """Parse all content and render all HTML without writing output.
+        """解析全部内容、在内存渲染全部 HTML，不写任何输出。
 
-        This is stage D of the failure policy.  Markdown errors, invalid front
-        matter, template exceptions, and missing templates are caught before a
-        staging directory even exists.
+        这是失败策略的 D 阶段：Markdown 错误、非法 front matter、模板异常、
+        缺失模板，都会在 staging 目录创建之前被捕获。
         """
 
         try:
@@ -215,7 +207,7 @@ class Builder:
         )
 
     def _materialize(self, prepared: PreparedSite) -> int:
-        """Copy assets and write pre-rendered HTML into the staging tree."""
+        """复制资源，把预渲染的 HTML 写入 staging 目录。"""
 
         assets = self._copy_stylesheet()
         assets += self._copy_user_assets()
@@ -223,7 +215,7 @@ class Builder:
             self._write_output(rendered.relative_path, rendered.content)
         return assets
 
-    # -- validation and filesystem -----------------------------------------
+    # -- 校验与文件系统 -----------------------------------------------------
 
     def _validate_project(self) -> None:
         if not self.content_dir.is_dir():
@@ -236,7 +228,7 @@ class Builder:
             raise BuildError(f"packaged stylesheet is missing: {stylesheet}")
 
         if self.output_dir.is_symlink():
-            # Refuse to recursively delete something that is not really ours.
+            # 拒绝递归删除不属于我们的东西。
             raise BuildError(
                 f"{self.output_dir} is a symlink; run `byggleaf clean` and build again"
             )
@@ -247,11 +239,10 @@ class Builder:
             )
 
     def _recover_publication(self) -> None:
-        """Repair leftovers from a process killed during a previous publish.
+        """修复上一次发布途中被强杀留下的残留。
 
-        If public/ is missing but a backup exists, restore the newest backup.
-        If public/ exists, any backups are stale.  Staging trees are always
-        disposable and are removed at the start of the next build.
+        public/ 缺失但存在备份时，恢复最新的备份；public/ 存在则备份都是
+        过期物；staging 目录永远可丢弃，在下一次构建开始时清理。
         """
 
         backups = sorted(self.root.glob(".byggleaf-public-*"))
@@ -277,11 +268,10 @@ class Builder:
                 staging.unlink(missing_ok=True)
 
     def _publish(self, staging: Path) -> None:
-        """Swap the finished staging tree into place.
+        """把完成的 staging 目录切换到位。
 
-        The old directory is renamed aside first; if the new tree cannot be
-        moved into place, the old directory is restored.  The only window in
-        which ``public/`` does not exist is the two local renames.
+        先把旧目录改名挪开；新树无法就位就恢复旧目录。``public/`` 不存在的
+        窗口只有两次本地 rename 之间。
         """
 
         final = self.output_dir
@@ -309,12 +299,12 @@ class Builder:
             raise
 
         if backup is not None:
-            # The new site is live; failure to tidy the backup is not a build
-            # failure, and the hidden directory is safe to remove later.
+            # 新站已上线；清理备份失败不算构建失败，
+            # 这个隐藏目录之后删除也是安全的。
             shutil.rmtree(backup, ignore_errors=True)
 
     def _detect_favicon(self) -> str | None:
-        """Look only in the user's assets.  No file means no icon, not an error."""
+        """只在用户资源目录里找；没有文件就是没有图标，不是错误。"""
 
         candidate = self.assets_dir / "img" / "favicon.ico"
         return "/assets/img/favicon.ico" if candidate.is_file() else None
@@ -327,7 +317,7 @@ class Builder:
         return 1
 
     def _copy_user_assets(self) -> int:
-        """Copy only media.  User CSS/JS has no supported path into a page."""
+        """只复制媒体；用户 CSS/JS 没有进入页面的支持路径。"""
 
         copied = 0
         for name in USER_ASSET_DIRECTORIES:
@@ -340,7 +330,7 @@ class Builder:
             copied += sum(1 for item in source.rglob("*") if item.is_file())
         return copied
 
-    # -- content discovery --------------------------------------------------
+    # -- 内容发现 -----------------------------------------------------------
 
     def _load_posts(self) -> list[Post]:
         posts_dir = self.content_dir / "posts"
@@ -355,7 +345,7 @@ class Builder:
                 raise BuildError(f"{path}: unsafe post filename")
             posts.append(parse_post(path, baseurl=self.config.site.baseurl))
 
-        # Newest first.  The title is a stable tie-breaker for equal dates.
+        # 最新在前；日期相同时用标题做稳定排序。
         posts.sort(
             key=lambda post: (post.published_timestamp, post.title),
             reverse=True,
@@ -363,7 +353,7 @@ class Builder:
         return posts
 
     def _load_pages(self) -> list[Page]:
-        """Discover every index.md except files inside content/posts/."""
+        """发现除 content/posts/ 里的文件之外的每个 index.md。"""
 
         pages: list[Page] = []
         for path in sorted(self.content_dir.rglob("index.md")):
@@ -371,7 +361,7 @@ class Builder:
                 continue
             relative = path.parent.relative_to(self.content_dir)
             if not relative.parts:
-                continue  # content/index.md would collide with Home
+                continue  # content/index.md 会与首页冲突
             if relative.parts[0] == "posts":
                 continue
             route = relative.as_posix()
@@ -387,7 +377,7 @@ class Builder:
         pages.sort(key=lambda page: page.route)
         return pages
 
-    # -- rendering ----------------------------------------------------------
+    # -- 渲染 ----------------------------------------------------------------
 
     def _render_site(
         self,
@@ -395,7 +385,7 @@ class Builder:
         pages: list[Page],
         favicon: str | None,
     ) -> list[OutputFile]:
-        """Render every page, feed, and sitemap entry into memory."""
+        """把每个页面、feed 与 sitemap 条目渲染到内存。"""
 
         files: list[OutputFile] = []
         site = self.config.site
@@ -483,9 +473,8 @@ class Builder:
             )
             sitemap_entries.append(SitemapEntry(path=page.url))
 
-        # The error page is a real document (same chrome, localized copy) but
-        # deliberately has no sitemap entry and no SEO metadata: crawlers
-        # should neither list nor index it.
+        # 错误页也是真实文档（同一套骨架、本地化文案），但刻意不进入
+        # sitemap、也不输出 SEO 元数据：爬虫既不应列出也不应索引它。
         files.append(
             OutputFile(
                 relative_path=Path("404.html"),
@@ -523,7 +512,7 @@ class Builder:
         return files
 
     def _assert_unique_outputs(self, files: list[OutputFile]) -> None:
-        """Fail preflight when two generated files would share one path."""
+        """两个生成文件占用同一路径时让预检失败。"""
 
         seen: set[str] = set()
         for output in files:
@@ -533,7 +522,7 @@ class Builder:
             seen.add(key)
 
     def _paginate(self, posts: list[Post]) -> list[tuple[int, list[Post], Pagination]]:
-        """Split posts into home-page slices using the configured page size."""
+        """按配置的每页数量，把文章切成首页分页。"""
 
         per_page = self.config.site.posts_per_page
         total_pages = max(1, (len(posts) + per_page - 1) // per_page)

@@ -1,8 +1,7 @@
-"""TOML configuration: parse once, validate once, then pass immutable values.
+"""TOML 配置：解析一次、校验一次，之后只传不可变值。
 
-ByggLeaf uses :mod:`tomllib` from the standard library, so configuration does
-not add a dependency.  The rest of the application only ever sees frozen
-dataclasses; templates cannot mutate site settings by accident.
+配置用标准库 :mod:`tomllib` 读取，不引入额外依赖；应用其余部分只见冻结的
+dataclass，模板也没法意外改站点设置。
 """
 
 from __future__ import annotations
@@ -17,10 +16,9 @@ from .locales import LocaleError, canonicalize_language
 
 CONFIG_FILENAME = "byggleaf.toml"
 
-# URL schemes that can execute or smuggle code.  This is a configuration
-# constraint, independent of how Markdown content is rendered: ``baseurl`` and
-# project links are site configuration, so nonsensical or executable values
-# are rejected early instead of producing a broken site.
+# 可执行/可夹带代码的 URL scheme。这是配置层面的约束，与 Markdown 内容
+# 怎么渲染无关：``baseurl`` 与项目链接属于站点配置，不合理或可执行的值
+# 应在解析阶段就拒绝，而不是生成一个坏掉的站点。
 _UNSAFE_URL_PREFIXES = (
     "javascript:",
     "vbscript:",
@@ -31,23 +29,22 @@ _URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
 
 
 def _unsafe_url(value: str) -> bool:
-    """True when a configured URL could execute code once a browser resolves it."""
+    """配置中的 URL 若被浏览器解析后可能执行代码，返回 True。"""
 
     compact = _URL_NOISE_RE.sub("", value).lower()
     return compact.startswith(_UNSAFE_URL_PREFIXES)
 
 
 class ConfigError(ValueError):
-    """A configuration file is absent, unreadable, or semantically invalid."""
+    """配置文件缺失、不可读或语义无效。"""
 
 
 def absolute_url(baseurl: str, path: str) -> str:
-    """Join a site-relative path onto ``baseurl``.
+    """把站点相对路径拼到 ``baseurl`` 上。
 
-    ``baseurl`` may be a full origin (``https://example.com``), a subdirectory
-    (``https://example.com/garden``), or an empty string for local root-relative
-    previews.  The returned value is always an absolute *path* from the web
-    server's point of view, or a fully qualified URL when a base URL is set.
+    ``baseurl`` 可以是完整域名（``https://example.com``）、子目录
+    （``https://example.com/garden``），或用于本地根相对预览的空串。
+    返回值对 Web 服务器而言总是绝对 *路径*；设置了 baseurl 时则是完整 URL。
     """
 
     if not path:
@@ -59,7 +56,7 @@ def absolute_url(baseurl: str, path: str) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Project:
-    """One entry in the home page's project list."""
+    """首页项目列表中的一项。"""
 
     name: str
     url: str
@@ -68,7 +65,7 @@ class Project:
 
 @dataclass(frozen=True, slots=True)
 class Site:
-    """Site-wide presentation values shared by every template."""
+    """所有模板共享的站点级呈现值。"""
 
     title: str
     baseurl: str
@@ -78,14 +75,14 @@ class Site:
     posts_per_page: int = 5
 
     def url(self, path: str) -> str:
-        """Turn a site path into the absolute URL used by templates."""
+        """把站点路径转成模板使用的绝对 URL。"""
 
         return absolute_url(self.baseurl, path)
 
 
 @dataclass(frozen=True, slots=True)
 class Config:
-    """The complete, validated configuration surface."""
+    """完整且经过校验的配置面。"""
 
     site: Site
     projects: tuple[Project, ...] = ()
@@ -112,10 +109,9 @@ def _string(
 
 
 def load_config(path: Path) -> Config:
-    """Read and validate ``byggleaf.toml``.
+    """读取并校验 ``byggleaf.toml``。
 
-    The error messages name both the file and the offending key.  A static site
-    generator should not make its user guess which line of TOML was wrong.
+    错误信息同时给出文件名与出错的键，不让用户去猜哪一行 TOML 写错了。
     """
 
     path = Path(path)
@@ -139,8 +135,8 @@ def load_config(path: Path) -> Config:
         raise ConfigError(f"{path.name}: [site] table is required")
 
     title = _string(site_table, "title", where="[site]", required=True)
-    # An empty baseurl is valid and useful: it produces root-relative links for
-    # local previews.  Missing baseurl is still a configuration mistake.
+    # 空 baseurl 合法且有用：生成本地预览所需的根相对链接；
+    # 但缺少 baseurl 仍是配置错误。
     if "baseurl" not in site_table:
         raise ConfigError("[site].baseurl is required (it may be an empty string)")
     baseurl = _string(
@@ -150,7 +146,7 @@ def load_config(path: Path) -> Config:
         raise ConfigError("[site].baseurl must not contain whitespace")
     if _unsafe_url(baseurl):
         raise ConfigError("[site].baseurl must not be an executable URL scheme")
-    # Normalise once.  No template or caller has to think about trailing slashes.
+    # 只归一化一次，模板与调用方都不用再考虑结尾斜杠。
     if baseurl == "/":
         baseurl = ""
     else:

@@ -1,8 +1,7 @@
-"""Safe removal of the generated output directory.
+"""安全删除生成目录。
 
-``clean`` is intentionally narrower than a general-purpose ``rm -rf``: it only
-touches ``public/``.  Symlinks are unlinked rather than followed, so a user can
-never accidentally clean a directory outside the project.
+``clean`` 刻意比 ``rm -rf`` 窄，只碰 ``public/``，不碰内容、配置和资源；
+符号链接只删链接本身、绝不跟随，免得误删项目之外的目录。
 """
 
 from __future__ import annotations
@@ -14,12 +13,12 @@ from pathlib import Path
 
 
 class CleanError(RuntimeError):
-    """The generated output directory could not be removed."""
+    """生成目录无法删除。"""
 
 
 @dataclass(frozen=True, slots=True)
 class CleanResult:
-    """What the clean command found and what it did."""
+    """记录 clean 实际发现了什么、做了什么。"""
 
     output_dir: Path
     removed: bool
@@ -27,10 +26,10 @@ class CleanResult:
 
 
 def clean_output(root: Path) -> CleanResult:
-    """Delete ``<root>/public`` and return a factual result.
+    """删除 ``<root>/public`` 并返回事实结果。
 
-    Missing output is successful and idempotent.  A symlink named ``public`` is
-    unlinked, never traversed.  A regular directory is removed recursively.
+    目标不存在视为成功（幂等）；``public`` 是符号链接时只 unlink、不进入；
+    普通目录则递归删除。
     """
 
     root = Path(root).resolve()
@@ -51,8 +50,8 @@ def clean_output(root: Path) -> CleanResult:
             shutil.rmtree(output)
             kind = "directory"
         else:
-            # Handles regular files and unusual entries without ever following
-            # a link (the symlink branch above already caught those).
+            # 普通文件与特殊条目直接 unlink，绝不跟随链接
+            #（符号链接已在上面的分支处理）。
             output.unlink()
             kind = "file"
     except OSError as exc:

@@ -1,8 +1,7 @@
-"""Local preview server built on the standard library.
+"""基于标准库的本地预览服务器。
 
-This module exists so the CLI never needs a web framework.  ``serve`` blocks
-until interrupted; closing the socket and catching Ctrl+C is the caller's
-concern (``app.py`` turns it into a calm exit).
+让 CLI 不用引入 Web 框架就能预览 ``public/``。``serve`` 会一直阻塞到被中断，
+关闭 socket、捕获 Ctrl+C 交给调用方处理，``app.py`` 会把它变成平静的退出。
 """
 
 from __future__ import annotations
@@ -17,21 +16,20 @@ from typing import BinaryIO
 
 
 class ServerError(RuntimeError):
-    """The preview directory or server address is invalid."""
+    """预览目录或监听地址无效。"""
 
 
-# Keep in sync with cli.DEFAULT_HOST / cli.DEFAULT_PORT.  The CLI may not
-# import core, so the two layers intentionally carry the same tiny constants.
+# 与 cli.DEFAULT_HOST / cli.DEFAULT_PORT 保持一致：CLI 不能导入 core，
+# 两层各自携带同一个小常量，并由测试钉住。
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 6789
 
 
 class _PreviewHandler(SimpleHTTPRequestHandler):
-    """A plain file server that refuses to cache during preview.
+    """朴素的文件服务器，预览期间禁用缓存。
 
-    Missing paths fall back to the built ``404.html`` — with a real 404
-    status — so the preview behaves like the static hosts the site is meant
-    for.
+    缺失路径会回退到构建出的 ``404.html`` 并返回真实的 404 状态码，
+    让预览行为和正式静态托管一致。
     """
 
     def end_headers(self) -> None:
@@ -60,10 +58,9 @@ def make_server(
     host: str = DEFAULT_HOST,
     port: int = DEFAULT_PORT,
 ) -> ThreadingHTTPServer:
-    """Create (but do not start) a preview server.
+    """创建（但不启动）预览服务器。
 
-    Exposed separately so tests can bind an ephemeral port, request pages, and
-    shut the server down deterministically.
+    单独暴露，便于测试绑定临时端口、请求页面并确定性地关闭。
     """
 
     directory = Path(directory).resolve()
@@ -86,12 +83,11 @@ def serve(
     port: int = DEFAULT_PORT,
     on_ready: Callable[[str], None] | None = None,
 ) -> None:
-    """Serve ``directory`` over HTTP until the process is interrupted.
+    """通过 HTTP 提供 ``directory``，直到进程被中断。
 
-    The default is deliberately loopback-only.  Pass ``host="0.0.0.0"`` (or
-    ``--bind 0.0.0.0`` on the command line) to expose the preview on a LAN.
-    ``on_ready`` receives the display URL *after* the socket has been bound, so
-    a bind error is reported without a misleading "serving..." message.
+    默认只绑定回环地址；传 ``host="0.0.0.0"``（或命令行 ``--bind 0.0.0.0``）
+    可暴露到局域网。``on_ready`` 在 socket 绑定成功后收到展示 URL，
+    这样绑定失败时不会先打印误导性的 "serving..."。
     """
 
     httpd = make_server(directory, host=host, port=port)

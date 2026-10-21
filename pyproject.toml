@@ -21,7 +21,7 @@ classifiers = [
     "Programming Language :: Python :: 3.13",
     "Topic :: Internet :: WWW/HTTP :: Site Management",
 ]
-# Deliberately tiny. Every dependency is a liability.
+# 刻意保持极小：每一个依赖都是负债。
 dependencies = [
     "markdown>=3.5,<4",
     "jinja2>=3.1,<4",
@@ -45,8 +45,8 @@ include-package-data = true
 [tool.setuptools.packages.find]
 include = ["byggleaf*"]
 
-# assets/, templates/ and resources/ are data, never importable Python packages.
-# Declaring them explicitly keeps wheels and sdists complete.
+# assets/、templates/ 与 resources/ 是纯数据，永远不是可导入的 Python 包。
+# 显式声明它们，wheel 与 sdist 才完整。
 [tool.setuptools.package-data]
 byggleaf = [
     "assets/css/*.css",

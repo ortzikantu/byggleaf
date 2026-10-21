@@ -1,4 +1,4 @@
-"""Application assembly tests: exercise the real CLI through app.main()."""
+"""应用装配测试：通过 app.main() 跑真实 CLI。"""
 
 from __future__ import annotations
 
@@ -228,7 +228,7 @@ class AppTests(unittest.TestCase):
 
 
 class _BlockedDependencies(importlib.abc.MetaPathFinder):
-    """A meta-path finder that makes third-party dependencies unimportable."""
+    """让第三方依赖无法被导入的 meta-path finder。"""
 
     def __init__(self, *names: str) -> None:
         self._names = frozenset(names)

@@ -1,4 +1,4 @@
-"""CLI parsing and dependency-injected dispatch."""
+"""CLI 解析与依赖注入分发。"""
 
 from __future__ import annotations
 

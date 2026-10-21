@@ -1,11 +1,11 @@
-{# A localized "page not found" page. Static hosts such as GitHub Pages
-   serve 404.html automatically for missing paths. #}
+{# 本地化的「页面未找到」页；GitHub Pages 等静态托管会自动把 404.html
+   用作缺失路径的错误页。 #}
 {% extends "base.html" %}
 
 {% block title %}{{ meta_title }}{% endblock %}
 
-{# Error pages are neither indexed nor shared: omit description, canonical
-   and Open Graph metadata. #}
+{# 错误页既不会被索引也不会被分享：省略 description、canonical 与
+   Open Graph 元数据。 #}
 {% block meta %}{% endblock %}
 
 {% block content %}

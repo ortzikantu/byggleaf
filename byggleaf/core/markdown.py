@@ -1,15 +1,12 @@
-"""Markdown rendering and front matter parsing.
+"""Markdown 渲染和 front matter 解析。
 
-The only third-party import in this module is the ``markdown`` package.  That
-is intentional: ByggLeaf does not implement its own Markdown parser, and it
-does not pull in YAML either.  TOML front matter (``+++``) is the canonical
-format; a deliberately tiny, scalar-only YAML compatibility layer (``---``)
-avoids surprising people who arrive from other generators.
+本模块只导入第三方 ``markdown`` 包——ByggLeaf 不自己实现 Markdown 解析器，
+也不引入 YAML。TOML front matter（``+++``）是规范格式；``---`` 只提供刻意
+很小、仅标量的 YAML 兼容层，免得从别家生成器迁来的人踩坑。
 
-Rendered HTML goes straight to a template.  ByggLeaf does not filter or
-rewrite raw HTML authored in Markdown; that content belongs to the site
-owner.  The only transformation is applying ``baseurl`` to local links and
-media produced by the Markdown renderer.
+渲染结果直接交给模板，ByggLeaf 不过滤、不改写用户在 Markdown 里写的原始
+HTML——那属于内容作者。唯一会做的是把 baseurl 应用到渲染器产出的本地链接和
+媒体上。
 """
 
 from __future__ import annotations
@@ -32,27 +29,23 @@ from .config import absolute_url
 
 
 class MarkdownError(ValueError):
-    """A Markdown file could not be read, parsed, or validated."""
+    """Markdown 文件无法读取、解析或校验。"""
 
 
-# URL-bearing attributes on elements the Markdown renderer can produce.  Raw
-# HTML authored in the source is never parsed into that tree, so it reaches
-# the page exactly as written.
+# Markdown 渲染器可能产出的、带 URL 的属性。源码里的原始 HTML 不会进入
+# 这棵树，因此会原样到达页面。
 _URL_ATTRIBUTES = ("href", "src")
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
-# Control characters and whitespace can hide a scheme inside a URL; normalise
-# before deciding whether a value is a local path.
+# URL 里可能用控制字符/空白隐藏 scheme；判定本地路径前先做归一化。
 _URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
 
 
 def _absolute_markdown_url(value: str, *, attribute: str, baseurl: str) -> str:
-    """Make local Markdown resource links obey the site's baseurl.
+    """让本地 Markdown 资源链接遵循站点的 baseurl。
 
-    Images and other ``src`` values are site assets, so both ``/assets/x`` and
-    ``assets/x`` resolve from the site root.  For ``href`` only root-relative
-    links are rewritten; a relative page link such as ``../other/`` keeps its
-    ordinary Markdown meaning.  External schemes, protocol-relative URLs,
-    fragments and query-only links are left untouched.
+    图片等 ``src`` 是站点资源，``/assets/x`` 与 ``assets/x`` 都按站点根解析；
+    ``href`` 只重写根相对链接，像 ``../other/`` 这样的相对页链接保持 Markdown
+    本义。外部 scheme、协议相对 URL、锚点与仅查询串链接都不动。
     """
 
     stripped = value.strip()
@@ -67,11 +60,10 @@ def _absolute_markdown_url(value: str, *, attribute: str, baseurl: str) -> str:
 
 
 class _BaseurlTreeprocessor(Treeprocessor):
-    """Apply ``baseurl`` to local links and media in rendered Markdown.
+    """把 baseurl 应用到渲染后 Markdown 中的本地链接与媒体。
 
-    Only elements produced by the Markdown renderer are visited.  Raw HTML
-    blocks written in the Markdown source are not parsed into this tree, so
-    they reach the page exactly as authored.
+    只访问 Markdown 渲染器产出的元素；源码里的原始 HTML 块不会进入这棵树，
+    因此原样到达页面。
     """
 
     def __init__(self, baseurl: str) -> None:
@@ -95,7 +87,7 @@ class _BaseurlTreeprocessor(Treeprocessor):
 
 
 class _BaseurlExtension(Extension):
-    """Register :class:`_BaseurlTreeprocessor` for one render call."""
+    """为一次渲染注册 :class:`_BaseurlTreeprocessor`。"""
 
     def __init__(self, baseurl: str) -> None:
         super().__init__()
@@ -108,7 +100,7 @@ class _BaseurlExtension(Extension):
 
 
 def render_markdown(text: str, *, baseurl: str = "") -> str:
-    """Render Markdown to an HTML5 fragment, applying ``baseurl`` to local URLs."""
+    """渲染为 HTML5 片段，并把 baseurl 应用到本地 URL。"""
 
     renderer = markdown_lib.Markdown(
         extensions=["extra", "sane_lists", _BaseurlExtension(baseurl)],
@@ -118,16 +110,15 @@ def render_markdown(text: str, *, baseurl: str = "") -> str:
 
 
 # ---------------------------------------------------------------------------
-# Front matter
+# Front matter（元数据头）
 # ---------------------------------------------------------------------------
 
 
 def _split_front_matter(text: str, *, source: Path) -> tuple[dict[str, object], str]:
-    """Return (metadata, body) for TOML or minimal YAML front matter.
+    """返回 (metadata, body)，支持 TOML 或极简 YAML front matter。
 
-    TOML is the supported format.  ``---`` blocks accept only flat
-    ``key: scalar`` lines because adding a YAML parser would violate the
-    two-dependency rule and, more importantly, the project's taste.
+    TOML 是受支持的格式；``---`` 块只接受扁平的 ``key: scalar`` 行——
+    引入 YAML 解析器会破坏“两个依赖”的规则，也不符合项目口味。
     """
 
     if text.startswith("\ufeff"):
@@ -257,7 +248,7 @@ def _parse_tags(metadata: dict[str, object], *, source: Path) -> tuple[str, ...]
 
 
 def _sortable_datetime(value: DateValue) -> dt.datetime:
-    """Normalise date/date-time values so mixed posts can be sorted safely."""
+    """把日期/日期时间统一成可比较的时间，混合文章也能安全排序。"""
 
     if isinstance(value, dt.datetime):
         if value.tzinfo is not None:
@@ -273,7 +264,7 @@ def _required_title(value: object, *, source: Path) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Text extraction
+# 文本提取
 # ---------------------------------------------------------------------------
 
 
@@ -294,27 +285,27 @@ def _text_from_html(fragment: str) -> str:
 
 
 def summarize_html(fragment: str, *, limit: int = 180) -> str:
-    """Extract a short, tag-free summary from the first rendered paragraph."""
+    """从首个渲染段落中提取一段无标签的短摘要。"""
 
     paragraph = re.search(r"<p(?:\s[^>]*)?>(.*?)</p>", fragment, re.IGNORECASE | re.DOTALL)
     text = _text_from_html(paragraph.group(1) if paragraph else fragment)
     if len(text) <= limit:
         return text
     shortened = text[:limit].rstrip()
-    # Prefer a word boundary when one exists reasonably close to the limit.
+    # 若限额附近存在词边界，优先在词边界截断。
     if " " in shortened[limit // 2 :]:
         shortened = shortened[: shortened.rfind(" ")].rstrip()
     return shortened.rstrip(" ,.;:") + "…"
 
 
 # ---------------------------------------------------------------------------
-# Documents
+# 文档对象
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
 class Post:
-    """A dated post, ready to hand to a template."""
+    """一篇带日期的文章，可直接交给模板。"""
 
     title: str
     date: DateValue
@@ -332,14 +323,14 @@ class Post:
 
     @property
     def published_timestamp(self) -> dt.datetime:
-        """Sort key; does not lose the display value of ``date``."""
+        """排序键；不会丢失 ``date`` 的展示值。"""
 
         return _sortable_datetime(self.date)
 
 
 @dataclass(frozen=True, slots=True)
 class Page:
-    """An independent page discovered from ``<directory>/index.md``."""
+    """从 ``<目录>/index.md`` 发现的独立页面。"""
 
     title: str
     route: str
@@ -353,7 +344,7 @@ class Page:
 
 
 def parse_post(path: Path, *, baseurl: str = "") -> Post:
-    """Read one post, validate its front matter, and render its body."""
+    """读取一篇文章，校验 front matter 并渲染正文。"""
 
     path = Path(path)
     try:
@@ -372,9 +363,8 @@ def parse_post(path: Path, *, baseurl: str = "") -> Post:
     author = _parse_author(metadata.get("author"), source=path)
     tags = _parse_tags(metadata, source=path)
 
-    # It is common to repeat the title as an H1 at the top of the body.  The
-    # template already owns the visible title, so remove only an exact
-    # duplicate; a deliberately different H1 is left alone.
+    # 正文开头常会重复一遍标题作为 H1；模板已负责可见标题，
+    # 因此只删除与 title 完全相同的重复项，故意不同的 H1 保持原样。
     leading_title, without_heading = extract_leading_heading(body)
     if leading_title and leading_title.casefold() == title.casefold():
         body = without_heading
@@ -397,10 +387,9 @@ _HEADING_RE = re.compile(r"^#\s+(.+?)\s*#*\s*$")
 
 
 def extract_leading_heading(text: str) -> tuple[str | None, str]:
-    """Lift a leading H1 out of a front-matter-less page body.
+    """从无 front matter 的页面正文中取出开头的 H1。
 
-    Returning the heading separately lets the template own the page title
-    without rendering the same heading twice.
+    把标题单独返回，模板就能拥有页面标题，而不必重复渲染同一个标题。
     """
 
     normalized = text.replace("\r\n", "\n").replace("\r", "\n")
@@ -422,14 +411,14 @@ def extract_leading_heading(text: str) -> tuple[str | None, str]:
 def render_page(
     path: Path, *, route: str | None = None, baseurl: str = ""
 ) -> Page:
-    """Read a standalone page and derive its title from its leading H1."""
+    """读取独立页面，并从开头的 H1 推导标题。"""
 
     path = Path(path)
     try:
         text = path.read_text(encoding="utf-8")
         if text.startswith("\ufeff"):
-            # Match _split_front_matter: a UTF-8 BOM must not defeat the
-            # leading-heading detection or leak into the rendered body.
+            # 与 _split_front_matter 一致：UTF-8 BOM 不能干扰
+            # 标题检测，也不能泄漏进渲染正文。
             text = text[1:]
     except (OSError, UnicodeError) as exc:
         raise MarkdownError(f"cannot read {path}: {exc}") from exc

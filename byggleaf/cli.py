@@ -1,12 +1,8 @@
-"""Command-line surface for ByggLeaf.
+"""ByggLeaf 的命令行表面。
 
-This module defines *what* the commands look like and *when* they run.  It
-does not know *how* a site is built.  The actual handlers are injected by
-``byggleaf.app``, which is the only module allowed to see both ``cli`` and
-``core``.  That keeps the command line reusable and the dependency graph
-acyclic.
-
-The module imports only the standard library.
+这里只定义命令长什么样、何时运行，不知道站点怎么构建。真正的 handler 由
+``byggleaf.app`` 注入——它是唯一同时认识 ``cli`` 和 ``core`` 的模块，命令行
+因此可复用，依赖图也不会成环。本模块只导入标准库。
 """
 
 from __future__ import annotations
@@ -18,14 +14,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
 
-# The command line deliberately does not import core.  These defaults are also
-# declared in core/server.py; a test pins the two values together.
+# CLI 刻意不导入 core。这两个默认值在 core/server.py 里也声明了一份，
+# 由测试钉住两边一致。
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 6789
 
 
 class Console:
-    """Tiny, dependency-free writer for human-facing terminal output."""
+    """面向终端的极简、无依赖输出器。"""
 
     def __init__(self, stream: TextIO | None = None) -> None:
         self.stream = stream if stream is not None else sys.stdout
@@ -35,7 +31,7 @@ class Console:
         self.stream.flush()
 
     def heading(self, text: str) -> None:
-        """A command banner: ``ByggLeaf · build``."""
+        """命令横幅：``ByggLeaf · build``。"""
 
         self._line(f"ByggLeaf · {text}")
 
@@ -49,13 +45,13 @@ class Console:
         self._line(f"error: {text}")
 
     def item(self, label: str, value: str) -> None:
-        """A quiet two-column detail line used by build/init summaries."""
+        """构建/init 摘要用的两列细节行。"""
 
         self._line(f"  {label:<9}{value}")
 
 
 # ---------------------------------------------------------------------------
-# Command options and injected handlers
+# 命令选项与注入的 handlers
 # ---------------------------------------------------------------------------
 
 
@@ -90,10 +86,10 @@ class ServeOptions:
 
 @dataclass(frozen=True)
 class Handlers:
-    """The application services the command line is allowed to call.
+    """命令行允许调用的应用服务。
 
-    ``app.py`` supplies implementations that wrap scaffold/core.  Keeping this
-    as a plain value object means ``cli.py`` has no import path to core.
+    实现由 ``app.py`` 提供并包装 scaffold/core；保持成普通值对象，
+    ``cli.py`` 就没有导入 core 的路径。
     """
 
     init: Callable[[InitOptions], int]
@@ -104,7 +100,7 @@ class Handlers:
 
 
 # ---------------------------------------------------------------------------
-# Parser
+# 参数解析
 # ---------------------------------------------------------------------------
 
 
@@ -199,12 +195,12 @@ def build_parser(version: str = "unknown") -> argparse.ArgumentParser:
 
 
 # ---------------------------------------------------------------------------
-# Dispatch
+# 分发
 # ---------------------------------------------------------------------------
 
 
 def _dispatch(args: argparse.Namespace, handlers: Handlers, root: Path) -> int:
-    """Call the injected handler for the parsed command."""
+    """调用解析出的命令对应的注入 handler。"""
 
     if args.command == "init":
         return handlers.init(InitOptions(root=root, force=args.force))
@@ -223,11 +219,10 @@ def main(
     handlers: Handlers | None = None,
     version: str = "unknown",
 ) -> int:
-    """Parse ``argv`` and dispatch to injected application handlers.
+    """解析 ``argv`` 并分发到注入的应用 handler。
 
-    The version is injected by :mod:`byggleaf.app` as well; the command line
-    never imports core.  When called directly without the assembly layer it
-    fails politely instead of creating a hidden dependency.
+    版本号同样由 :mod:`byggleaf.app` 注入，命令行从不导入 core。直接调用
+    却没有装配层时会礼貌失败，而不是制造隐式依赖。
     """
 
     parser = build_parser(version)
@@ -246,7 +241,7 @@ def main(
     try:
         return _dispatch(args, handlers, Path.cwd())
     except KeyboardInterrupt:
-        # Ctrl+C is an ordinary way to leave a preview server, not an error.
+        # Ctrl+C 只是离开预览服务器的普通方式，不是错误。
         Console(stream=sys.stderr).muted("stopped.")
         return 130
     except BrokenPipeError:

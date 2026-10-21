@@ -1,7 +1,7 @@
-"""Create a new article from the packaged content template.
+"""从包内模板创建新文章。
 
-This is the service behind ``byggleaf new content``.  It only touches the
-workspace's ``content/posts`` directory and never rewrites an existing file.
+``byggleaf new content`` 的服务实现，只写 ``content/posts``。已有文件绝不
+覆盖，重复执行会自动递增文件名。
 """
 
 from __future__ import annotations
@@ -16,19 +16,19 @@ DATE_PLACEHOLDER = "{{date}}"
 
 
 class NewError(RuntimeError):
-    """A new content file could not be created."""
+    """新内容文件无法创建。"""
 
 
 @dataclass(frozen=True, slots=True)
 class NewArticleResult:
-    """The file that was created and the timestamp written into it."""
+    """记录创建的文件与写入的时间戳。"""
 
     path: Path
     published: dt.datetime
 
 
 def _next_available_path(posts_dir: Path) -> Path:
-    """Pick new-article.md, then new-article-2.md, and so on."""
+    """依次选择 new-article.md、new-article-2.md……不会覆盖已有文件。"""
 
     candidate = posts_dir / "new-article.md"
     index = 2
@@ -43,10 +43,10 @@ def create_article(
     *,
     now: dt.datetime | None = None,
 ) -> NewArticleResult:
-    """Create an empty article with dated front matter.
+    """创建带日期 front matter 的空文章。
 
-    Existing files are never overwritten; repeated calls produce
-    ``new-article.md``, ``new-article-2.md``, etc.
+    已存在的文件绝不覆盖；重复调用会得到 ``new-article.md``、
+    ``new-article-2.md``……
     """
 
     root = Path(root).resolve()

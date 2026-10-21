@@ -1,8 +1,9 @@
-"""Canonicalise BCP 47 language tags and load exact UI translation files.
+"""规范化 BCP 47 语言标签，并按精确文件名加载界面翻译。
 
-There is deliberately no regional fallback: ``zh-SG`` only works if
-``locales/zh-SG.toml`` exists.  Missing catalogs fail loudly with the available
-files and a contribution hint, instead of silently showing another language.
+任意写法都会规范化成 BCP 47（``zh-hk`` → ``zh-HK``），然后只加载
+``locales/<规范化标签>.toml``。这里不做地区回退：``zh-SG`` 只有在
+``locales/zh-SG.toml`` 存在时才可用，缺文件会报出可用列表和贡献提示，
+而不是悄悄显示另一种语言。
 """
 
 from __future__ import annotations
@@ -21,12 +22,12 @@ _VARIANT_RE = re.compile(r"^(?:[0-9][A-Za-z0-9]{3}|[A-Za-z0-9]{5,8})$")
 
 
 class LocaleError(RuntimeError):
-    """A language tag or translation catalog is invalid or missing."""
+    """语言标签或翻译目录无效或缺失。"""
 
 
 @dataclass(frozen=True, slots=True)
 class Locale:
-    """A validated translation catalog for one language tag."""
+    """某一语言标签下经过校验的翻译目录。"""
 
     language: str
     strings: dict[str, str]
@@ -34,8 +35,7 @@ class Locale:
     def text(self, key: str, **values: object) -> str:
         template = self.strings.get(key)
         if not template or not template.strip():
-            # A partially translated catalog stays usable: the missing key is
-            # shown verbatim instead of aborting the build.
+            # 允许部分翻译：缺 key 时直接显示 key 名，而不是中断构建。
             return key
         try:
             return template.format(**values)
@@ -46,7 +46,7 @@ class Locale:
 
 
 def canonicalize_language(tag: str) -> str:
-    """Validate a BCP 47 tag subset and return its conventional casing."""
+    """校验 BCP 47 标签子集，返回约定的大小写形式。"""
 
     if not isinstance(tag, str):
         raise LocaleError("language must be a string")
@@ -123,7 +123,7 @@ def _read_locale(path: Path) -> dict[str, str]:
 
 
 def load_locale(language: str) -> Locale:
-    """Load exactly ``locales/<canonical-language>.toml``."""
+    """按精确文件名加载 ``locales/<规范化标签>.toml``。"""
 
     canonical = canonicalize_language(language)
     path = LOCALES_DIR / f"{canonical}.toml"

@@ -1,4 +1,4 @@
-{# One post at /posts/<slug>/. #}
+{# 文章详情页（/posts/<slug>/）。 #}
 {% extends "base.html" %}
 
 {% block title %}{{ post.title }} · {{ site.title }}{% endblock %}
@@ -44,8 +44,7 @@
     </p>
   </header>
 
-  {# Rendered by the markdown package; raw HTML written by the author is
-     passed through unchanged. #}
+  {# 由 markdown 包渲染；作者写入的原始 HTML 原样透传。 #}
   <div class="prose">
     {{ post.html|safe }}
   </div>

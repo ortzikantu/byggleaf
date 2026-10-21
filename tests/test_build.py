@@ -1,4 +1,4 @@
-"""End-to-end tests for scaffold, build routing, and generated HTML."""
+"""脚手架、构建路由与生成 HTML 的端到端测试。"""
 
 from __future__ import annotations
 
@@ -144,7 +144,7 @@ class BuildTests(unittest.TestCase):
         return match.group(1)
 
     def example_project_name(self) -> str:
-        """The first project name shipped in the packaged example config."""
+        """打包示例配置里的第一个项目名。"""
 
         data = tomllib.loads(
             (ROOT / "byggleaf/resources/config.example.toml").read_text(
@@ -470,7 +470,7 @@ class BuildTests(unittest.TestCase):
         self.assertIn("The page you are looking for does not exist.", page)
         self.assertIn('href="https://example.com/"', page)
         self.assertNotIn("404.html", self.read("sitemap.xml"))
-        # Error pages are not indexed or shared: no SEO/social metadata.
+        # 错误页不应被索引或分享：不输出 SEO/社交元数据。
         self.assertNotIn('rel="canonical"', page)
         self.assertNotIn('<meta name="description"', page)
         self.assertNotIn('property="og:', page)
@@ -559,7 +559,7 @@ class BuildTests(unittest.TestCase):
         self.assertIn('<h1 class="page-title">Notes</h1>', output)
 
     def test_raw_html_in_markdown_is_preserved_in_generated_pages(self) -> None:
-        # Raw HTML written by the author is not filtered by ByggLeaf.
+        # 作者写入的原始 HTML 不会被 ByggLeaf 过滤。
         self.write_post(
             "raw-html.md",
             "Raw HTML",

@@ -1,4 +1,4 @@
-"""Configuration parsing and validation."""
+"""配置解析与校验。"""
 
 from __future__ import annotations
 

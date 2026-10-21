@@ -1,4 +1,4 @@
-"""Language tag canonicalisation and exact translation lookup."""
+"""语言标签规范化与精确翻译查找。"""
 
 from __future__ import annotations
 

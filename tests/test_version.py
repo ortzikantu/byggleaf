@@ -1,4 +1,4 @@
-"""The version resolves from the project's own pyproject, or falls back."""
+"""版本从项目自己的 pyproject 解析，或按回退链解析。"""
 
 from __future__ import annotations
 
@@ -83,7 +83,7 @@ class VersionTests(unittest.TestCase):
                 self.assertEqual(_source_version(start=project), "")
 
     def test_installed_version_reads_real_metadata(self) -> None:
-        # The editable install exposes distribution metadata in this environment.
+        # 可编辑安装在当前环境里暴露了分发元数据。
         self.assertRegex(_installed_version(), r"^\d")
 
     def test_installed_version_falls_back_when_missing(self) -> None:

@@ -1,18 +1,13 @@
-"""Application assembly point.
+"""应用装配点。
 
-``app.py`` is the only module that imports both ``cli`` and ``core``.  The CLI
-defines the command surface and receives handlers from this file; core modules
-never learn that a command line exists.  This is the seam that keeps the
-dependency graph pointing in one direction.
+``app.py`` 是唯一同时导入 ``cli`` 和 ``core`` 的模块。CLI 定义命令表面，并从
+这里接收 handler；core 永远不知道命令行的存在。这是让依赖图单向流动的接缝。
+安装后的 ``byggleaf`` console script 也落在这里，包内刻意不提供
+``__main__.py``——一个入口就够了。
 
-The installed ``byggleaf`` console script lands here.  There is deliberately
-no package-level ``__main__.py``: one entry point is enough.
-
-Core services that pull in third-party packages are imported inside the
-command handlers rather than at module top.  ``core/version.py`` is
-standard-library only, so ``byggleaf --version`` and ``--help`` still work in
-an environment without ``markdown``/``jinja2`` (for example a wheel installed
-with ``--no-deps`` during the CI smoke test).
+依赖第三方包的 core 服务都在各命令 handler 内延迟导入，而 ``core/version.py``
+只用标准库，所以没有 ``markdown``/``jinja2`` 的环境（比如 CI 冒烟里
+``--no-deps`` 安装的 wheel）也能运行 ``--version`` 和 ``--help``。
 """
 
 from __future__ import annotations
@@ -25,7 +20,7 @@ from .core.version import VERSION
 
 
 def _display(path: Path, root: Path) -> str:
-    """Prefer a short workspace-relative path in terminal summaries."""
+    """终端摘要优先显示工作区相对路径。"""
 
     try:
         return str(path.relative_to(root))
@@ -175,7 +170,7 @@ def _cmd_serve(options: cli.ServeOptions) -> int:
     try:
         configured_baseurl = load_config(root / CONFIG_FILENAME).site.baseurl
     except ConfigError:
-        # A preview of already-built files should still work without a config.
+        # 预览已构建好的文件，即便配置缺失也应可用。
         pass
 
     def ready(url: str) -> None:
@@ -221,7 +216,7 @@ def _cmd_serve(options: cli.ServeOptions) -> int:
 
 
 def handlers() -> cli.Handlers:
-    """Wire command names to the application services they are allowed to use."""
+    """把命令名接到允许使用的应用服务上。"""
 
     return cli.Handlers(
         init=_cmd_init,
@@ -233,6 +228,6 @@ def handlers() -> cli.Handlers:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Console-script entry point."""
+    """console script 入口。"""
 
     return cli.main(argv, handlers=handlers(), version=VERSION)

@@ -1,4 +1,4 @@
-"""Creating empty articles from the packaged template."""
+"""从包内模板创建空文章。"""
 
 from __future__ import annotations
 

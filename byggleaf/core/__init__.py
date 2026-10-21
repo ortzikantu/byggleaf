@@ -1,8 +1,7 @@
-"""Business orchestration for ByggLeaf.
+"""ByggLeaf 的业务编排层。
 
-Submodules depend only on the standard library, the two approved rendering
-libraries, and each other.  They never import ``app`` or ``cli``.  Workspace
-scaffolding lives here too: it is a core operation, not an entry-point concern.
-Keep this file free of eager imports so the dependency graph stays easy to
-audit.
+子模块只依赖标准库、两个已批准的渲染库以及彼此，绝不导入 ``app`` 或
+``cli``。工作区脚手架（scaffold）也在这里——它是核心操作，不属于入口层。
+
+这个文件不写任何导入，依赖图才容易审计。
 """

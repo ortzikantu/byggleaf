@@ -1,6 +1,5 @@
-{# One base shell. Head, navbar and footer change together, so they live here
-   instead of being scattered across tiny partials. The only reusable fragment
-   is postlist.html. #}
+{# 唯一的页面骨架：head、导航与页脚总是一起变化，所以放在同一文件，
+   不拆成碎片化 partial；唯一可复用的片段是 postlist.html。 #}
 <!doctype html>
 <html lang="{{ site.language }}">
 <head>
@@ -29,7 +28,7 @@
 
   <div class="site-shell">
     <header class="site-header">
-      {# Exactly two links. Hidden pages are never appended here. #}
+      {# 恰好两个链接；隐藏页面永远不会追加在这里。 #}
       <nav class="site-nav" aria-label="{{ ui('primary_nav') }}">
         <ul>
           {% for item in nav %}

@@ -1,5 +1,5 @@
-# ByggLeaf is configured in one place. There is no theme block because there
-# is no theme system. The values below are the entire public surface.
+# ByggLeaf 只在一处配置。没有 [theme] 块，因为没有主题系统；
+# 下面的值就是全部公开配置面。
 [site]
 title = "My Digital Garden"
 hero_subtitle = "用代码和文字记录生活。"

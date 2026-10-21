@@ -1,4 +1,4 @@
-"""Structural HTML and accessibility checks for generated pages."""
+"""生成页面的 HTML 结构与无障碍检查。"""
 
 from __future__ import annotations
 
@@ -91,7 +91,7 @@ class HtmlQualityTests(unittest.TestCase):
                 rels = {attrs.get("rel") for attrs in links}
 
                 if path.name == "404.html":
-                    # Error pages are neither indexed nor shared.
+                    # 错误页不应被索引或分享。
                     self.assertIsNone(meta.get("description"))
                     self.assertIsNone(meta.get("og:title"))
                     self.assertIsNone(meta.get("og:description"))

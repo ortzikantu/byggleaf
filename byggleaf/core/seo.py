@@ -1,4 +1,4 @@
-"""Generate sitemap.xml and rss.xml from the prepared site content."""
+"""从准备好的站点内容生成 robots.txt、sitemap.xml 与 rss.xml。"""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from .version import VERSION
 
 @dataclass(frozen=True, slots=True)
 class SitemapEntry:
-    """One URL in the sitemap, with an optional ISO last-modified value."""
+    """sitemap 中的一条 URL，可选 ISO 格式的 lastmod。"""
 
     path: str
     lastmod: str | None = None
@@ -37,10 +37,9 @@ def _rfc822(value: DateValue) -> str:
 
 
 def render_robots(config: Config) -> str:
-    """Render a minimal robots.txt: crawl everything, point to the sitemap.
+    """生成最小化的 robots.txt：允许全部爬虫，并指向 sitemap。
 
-    The Sitemap line requires an absolute URL, so it is omitted when
-    ``baseurl`` is empty (root-relative local previews).
+    Sitemap 行必须是绝对地址，因此 ``baseurl`` 为空（本地根相对预览）时省略。
     """
 
     lines = ["User-agent: *", "Allow: /", ""]
@@ -50,7 +49,7 @@ def render_robots(config: Config) -> str:
 
 
 def render_sitemap(config: Config, entries: list[SitemapEntry]) -> str:
-    """Render a deterministic sitemap in sitemaps.org XML format."""
+    """按 sitemaps.org XML 格式生成确定性的 sitemap。"""
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -72,7 +71,7 @@ def render_rss(
     *,
     build_time: dt.datetime | None = None,
 ) -> str:
-    """Render an RSS 2.0 feed with summaries and article tags."""
+    """生成 RSS 2.0 feed，包含摘要与文章 tags。"""
 
     site = config.site
     channel_link = site.url("/")

@@ -1,10 +1,8 @@
-"""Architecture guards for ByggLeaf.
+"""ByggLeaf 的架构守卫。
 
-These tests are intentionally structural rather than behavioural.  They fail
-when a future change makes the package easier to write but harder to reason
-about: an entry-layer import from core, a third-party package outside the
-approved two, a cycle, JavaScript sneaking into the static assets, or missing
-wheel package-data.
+这些测试刻意检查结构而不是行为，盯的是那些“写起来更容易、推理起来更难”的
+改动：core 反向导入入口层、出现两个批准依赖之外的第三方包、导入环、
+JavaScript 混进静态资源，或 wheel 缺少 package-data。
 """
 
 from __future__ import annotations
@@ -51,7 +49,7 @@ def _package_parts(path: Path) -> list[str]:
 
 
 def _imports(path: Path) -> set[str]:
-    """Resolve imports to absolute module names (attributes are not modules)."""
+    """把 import 解析成绝对模块名（属性不是模块）。"""
 
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     package = _package_parts(path)

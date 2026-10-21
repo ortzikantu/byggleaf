@@ -1,17 +1,15 @@
-"""The Jinja2 rendering base.
+"""Jinja2 渲染基础设施。
 
-ByggLeaf has exactly one template set, and it lives inside the installed
-package.  There is deliberately no FileSystemLoader pointed at the user's
-project: custom HTML templates are not a supported feature.  The user writes
-Markdown; the dictator handles typography.
+模板只从安装包内加载，刻意不指向用户项目——自定义 HTML 模板不是支持的功能，
+用户只写 Markdown，排版交给工具。
 
-The internal layout is intentionally flat and uses short, direct names:
+模板布局保持扁平、名字短而直接：
 
-    base.html      shared page chrome
-    home.html      paginated home page
-    post.html      one post detail
-    page.html      standalone/custom page
-    postlist.html  article stream used by the home page
+    base.html      公共骨架（head/导航/页脚）
+    home.html      带分页的首页
+    post.html      文章详情
+    page.html      独立页面
+    postlist.html  首页文章流
 """
 
 from __future__ import annotations
@@ -37,11 +35,11 @@ TEMPLATES_DIR = Path(__file__).resolve().parent.parent / "templates"
 
 
 class TemplateError(RuntimeError):
-    """A packaged template is missing or failed to render."""
+    """包内模板缺失或渲染失败。"""
 
 
 def format_date(value: object) -> str:
-    """Display dates quietly; include time only when one was provided."""
+    """安静地格式化日期：只有带时间时才显示时间。"""
 
     if isinstance(value, dt.datetime):
         return value.strftime("%Y-%m-%d %H:%M")
@@ -51,7 +49,7 @@ def format_date(value: object) -> str:
 
 
 class TemplateEngine:
-    """Configured Jinja environment plus the URL helper used everywhere."""
+    """已配置的 Jinja 环境，并注入全局 URL 辅助函数。"""
 
     def __init__(self, config: Config, locale: Locale) -> None:
         if not TEMPLATES_DIR.is_dir():
@@ -68,8 +66,7 @@ class TemplateEngine:
             keep_trailing_newline=True,
             auto_reload=False,
         )
-        # Every URL in every template goes through this function.  That is how
-        # the absolute-baseurl rule is kept honest in one place.
+        # 所有模板的 URL 都走这个函数，baseurl 拼接规则只需在一处维护。
         self.environment.globals["url"] = lambda path: absolute_url(
             config.site.baseurl, path
         )
@@ -78,7 +75,7 @@ class TemplateEngine:
         self.environment.filters["datefmt"] = format_date
 
     def render(self, template_name: str, **context: object) -> str:
-        """Render a packaged template with the site config pre-bound."""
+        """渲染包内模板，并预先绑定站点配置。"""
 
         context.setdefault("site", self.config.site)
         context.setdefault("projects", self.config.projects)

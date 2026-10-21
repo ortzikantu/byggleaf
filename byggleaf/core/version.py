@@ -1,14 +1,11 @@
-"""The single source of truth for ByggLeaf's version.
+"""版本号只在这里解析一次。
 
-``raw_version()`` is the PEP 440 version (``0.1.0``); ``get_version()`` is the
-display form (``v0.1.0``) used by the CLI, the generator meta, the RSS feed
-and the footer.
+``raw_version()`` 给 PEP 440 版本（如 ``1.2.3``），``get_version()`` 给展示
+形式（``v1.2.3``）；CLI、generator meta、RSS 和页脚都读这里。
 
-Resolution order: a source checkout (including ``pip install -e .``) reads the
-project's own ``pyproject.toml``, so a bumped version applies immediately; a
-wheel has no readable pyproject and falls back to ``importlib.metadata``; if
-both fail the placeholder ``0.0.0`` keeps rendering alive — a cosmetic value
-must never break the site.
+源码检出一律以本项目的 ``pyproject.toml`` 为准，改完立即生效；wheel 里没有
+pyproject，就回退到 ``importlib.metadata``；两者都拿不到时用 ``0.0.0`` 兜底。
+版本号只是展示信息，不值得我们为它让站点崩溃。
 """
 
 from __future__ import annotations
@@ -16,7 +13,7 @@ from __future__ import annotations
 import tomllib
 from pathlib import Path
 
-#: Distribution name, matching ``[project].name`` in ``pyproject.toml``.
+#: 分发名，与 ``pyproject.toml`` 的 ``[project].name`` 一致。
 DISTRIBUTION = "byggleaf"
 _FALLBACK = "0.0.0"
 
@@ -24,7 +21,7 @@ _cache: str | None = None
 
 
 def _installed_version() -> str:
-    """The installed distribution's version, or "" when unavailable or broken."""
+    """已安装分发包的版本；未安装或元数据损坏时返回空串。"""
 
     from importlib.metadata import PackageNotFoundError, version
 
@@ -32,16 +29,15 @@ def _installed_version() -> str:
         return str(version(DISTRIBUTION) or "").strip()
     except PackageNotFoundError:
         return ""
-    except Exception:  # corrupt metadata must not break the site
+    except Exception:  # 元数据损坏也不该拖垮站点
         return ""
 
 
 def _source_version(start: Path | None = None) -> str:
-    """Walk up from this file to the nearest *ByggLeaf* pyproject.
+    """从本文件向上查找最近的 *ByggLeaf* pyproject。
 
-    Only a pyproject whose ``[project].name`` equals ``DISTRIBUTION`` counts:
-    a venv created inside some other project's tree must not donate its
-    version number.
+    只认 ``[project].name == DISTRIBUTION`` 的文件：虚拟环境若建在别的项目
+    目录里，不会误取别人的版本号。
     """
 
     base = (start or Path(__file__).resolve().parent).resolve()
@@ -53,9 +49,8 @@ def _source_version(start: Path | None = None) -> str:
             with pyproject.open("rb") as handle:
                 data = tomllib.load(handle)
         except Exception:
-            # Foreign, unreadable, or pathological pyproject files in ancestor
-            # directories (RecursionError on hostile nesting, broken metadata,
-            # ...) must never break the site over a cosmetic value.
+            # 祖先目录里陌生、不可读或病态的 pyproject（恶意嵌套触发
+            # RecursionError、元数据损坏等），都不能因为一个展示值拖垮站点。
             continue
         project = data.get("project") or {}
         if str(project.get("name") or "").strip().lower() != DISTRIBUTION:
@@ -67,7 +62,7 @@ def _source_version(start: Path | None = None) -> str:
 
 
 def raw_version() -> str:
-    """The PEP 440 version, resolved once per process."""
+    """返回 PEP 440 版本，进程内只解析一次。"""
 
     global _cache
     if _cache is None:
@@ -76,13 +71,13 @@ def raw_version() -> str:
 
 
 def get_version() -> str:
-    """The display version (``v0.1.0``)."""
+    """返回展示形式，如 ``v1.2.3``。"""
 
     return f"v{raw_version()}"
 
 
 def reset_cache() -> None:
-    """Drop the cached version (tests use it when switching install state)."""
+    """丢弃缓存；测试切换安装状态时使用。"""
 
     global _cache
     _cache = None

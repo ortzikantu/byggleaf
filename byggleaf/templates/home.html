@@ -1,4 +1,4 @@
-{# Home page at /. The post stream is paginated here; there is no archive page. #}
+{# 首页（/）：文章流在这里分页，不生成归档页。 #}
 {% extends "base.html" %}
 
 {% block title %}{% if pagination.current_page > 1 %}{{ ui('page_title', page=pagination.current_page) }} · {% endif %}{{ site.title }}{% endblock %}

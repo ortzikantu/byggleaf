@@ -1,12 +1,10 @@
-"""Generate the small, opinionated workspace used by ``byggleaf init``.
+"""生成 ``byggleaf init`` 使用的克制工作区。
 
-Scaffolding is a core operation: a one-way writer of inert files.  It imports
-no builder, renderer, or command-line code, so the initial workspace contract
-stays independent from the rendering implementation.
+这是一个只写惰性文件的单向操作，不导入 builder、渲染器或命令行代码，
+初始工作区的契约因此独立于渲染实现。
 
-The generated layout is the complete public API of a garden: a TOML file,
-media directories, and Markdown.  There is no theme directory, no template
-override directory, and no place to put JavaScript.
+生成的布局就是一个花园的完整公开 API：一个 TOML、媒体目录和 Markdown；
+没有主题目录、没有模板覆盖目录，也没有放 JavaScript 的地方。
 """
 
 from __future__ import annotations
@@ -17,12 +15,11 @@ from pathlib import Path
 
 
 class ScaffoldError(RuntimeError):
-    """Raised when a workspace cannot be created safely."""
+    """工作区无法安全创建。"""
 
 
-# Package data lives at the package root, two levels above this core module.
-# These files are read at init time and then belong to the user; ByggLeaf never
-# edits them behind their back.
+# 包内数据位于包根（比本模块高两层）。这些文件只在 init 时读取，
+# 之后归用户所有；ByggLeaf 不会背着用户改动它们。
 PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 EXAMPLE_CONFIG = PACKAGE_ROOT / "resources" / "config.example.toml"
 DEFAULT_FAVICON = PACKAGE_ROOT / "assets" / "img" / "favicon.ico"
@@ -100,7 +97,7 @@ CONTENT_DIRECTORIES: tuple[Path, ...] = (
 
 @dataclass(frozen=True)
 class ScaffoldResult:
-    """What ``init`` actually did, for a truthful terminal summary."""
+    """记录 init 实际做了什么，供终端摘要如实输出。"""
 
     root: Path
     created: tuple[Path, ...]
@@ -109,7 +106,7 @@ class ScaffoldResult:
 
 
 def _write_file(path: Path, content: str, *, force: bool) -> bool:
-    """Write one scaffold file, returning False when an existing file is kept."""
+    """写一个脚手架文件；文件已存在且未 force 时保留并返回 False。"""
 
     if path.exists() and not force:
         return False
@@ -119,11 +116,11 @@ def _write_file(path: Path, content: str, *, force: bool) -> bool:
 
 
 def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
-    """Create the ByggLeaf workspace under ``root``.
+    """在 ``root`` 下创建 ByggLeaf 工作区。
 
-    Existing user files are never overwritten unless ``force`` is explicit.
-    The one hard stop is an existing ``byggleaf.toml`` without ``--force``:
-    quietly layering a second garden on top of the first is not kind.
+    用户已有的文件只在显式 ``force`` 时覆盖；唯一的硬性拦截是已存在
+    ``byggleaf.toml`` 却没加 ``--force``——在别人的花园上悄悄再盖一层
+    并不友善。
     """
 
     root = Path(root).resolve()
@@ -154,9 +151,8 @@ def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
     created: list[Path] = []
     skipped: list[Path] = []
 
-    # The config is written first so a failed init leaves an obvious, fixable
-    # signal rather than a half-populated content directory.  An existing
-    # config without --force has already raised above.
+    # 先写配置：init 失败时留下的是明显可修的信号，而不是只填了一半的
+    # 内容目录。已存在配置且未加 --force 的情况在上方已经报错。
     _write_file(config_path, config_text, force=force)
     created.append(config_path)
 
@@ -167,9 +163,8 @@ def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
         else:
             skipped.append(target)
 
-    # A packaged favicon gives every new garden a recognisable tab icon.  It
-    # is copied once into the user's assets and is thereafter theirs to replace
-    # or delete.  If it is deleted, the builder simply omits the icon link.
+    # 包内 favicon 让每个新花园都有可辨识的标签页图标；只复制一次到用户
+    # 资源目录，之后由用户替换或删除。删除后构建器只是不再输出 icon 链接。
     favicon_copied = False
     favicon_target = root / "assets" / "img" / "favicon.ico"
     if DEFAULT_FAVICON.is_file() and (force or not favicon_target.exists()):

@@ -1,4 +1,4 @@
-"""The clean command removes public/ and nothing outside it."""
+"""clean 只删 public/，不动其外的东西。"""
 
 from __future__ import annotations
 

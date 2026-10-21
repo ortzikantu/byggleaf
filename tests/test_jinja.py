@@ -1,4 +1,4 @@
-"""Template engine guards."""
+"""模板引擎守卫测试。"""
 
 from __future__ import annotations
 

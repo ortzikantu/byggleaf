@@ -1,4 +1,4 @@
-"""HTTP smoke test: serve a built site and follow pagination like a browser."""
+"""HTTP 冒烟测试：像浏览器一样预览已构建站点并跟随分页。"""
 
 from __future__ import annotations
 
@@ -103,7 +103,7 @@ class ServerErrorPathTests(unittest.TestCase):
 
 
 class _StubHttpServer:
-    """A stand-in for ThreadingHTTPServer used to test serve()'s URL logic."""
+    """用于测试 serve() URL 逻辑的 ThreadingHTTPServer 替身。"""
 
     def __init__(self, host: str, port: int) -> None:
         self.server_address = (host, port)
@@ -174,7 +174,7 @@ class ServeWrapperTests(unittest.TestCase):
                     body = response.read().decode("utf-8")
                 finally:
                     connection.close()
-                # The default scaffold config is zh-CN.
+                # 默认脚手架配置是 zh-CN。
                 self.assertIn("页面未找到", body)
                 self.assertIn("<html", body)
 
