@@ -212,7 +212,8 @@ public/404.html
 - `robots.txt` 允许全部爬虫；`baseurl` 非空时指向 sitemap 的绝对地址，
   为空（纯本地预览）时省略 Sitemap 行。
 - `404.html` 是本地化的「页面未找到」页面，沿用统一的头部、导航与页脚，
-  不会进入 sitemap。多数静态托管（如 GitHub Pages）会自动把它用作错误页；
+  不输出 description、canonical 与 Open Graph 元数据（错误页不应被索引或分享），
+  也不会进入 sitemap。多数静态托管（如 GitHub Pages）会自动把它用作错误页；
   本地 `byggleaf serve` 也会把缺失路径回退到它并返回真实的 404 状态码。
 
 ### 独立页面

@@ -483,8 +483,9 @@ class Builder:
             )
             sitemap_entries.append(SitemapEntry(path=page.url))
 
-        # The error page is a real document (same chrome, localized copy), but
-        # it is deliberately not a sitemap entry: crawlers should not list it.
+        # The error page is a real document (same chrome, localized copy) but
+        # deliberately has no sitemap entry and no SEO metadata: crawlers
+        # should neither list nor index it.
         files.append(
             OutputFile(
                 relative_path=Path("404.html"),
@@ -495,9 +496,6 @@ class Builder:
                     meta_title=(
                         f"{self.locale.text('not_found')} · {site.title}"
                     ),
-                    meta_description=self.locale.text("not_found_hint"),
-                    canonical_path="/404.html",
-                    og_type="website",
                 ),
             )
         )

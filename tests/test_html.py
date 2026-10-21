@@ -86,15 +86,26 @@ class HtmlQualityTests(unittest.TestCase):
                     for tag, attrs in document.tags
                     if tag == "meta"
                 }
-                self.assertTrue(meta.get("description"))
-                self.assertTrue(meta.get("og:title"))
-                self.assertTrue(meta.get("og:description"))
-                self.assertTrue(meta.get("og:url"))
-                self.assertTrue(meta.get("og:type"))
 
                 links = [attrs for tag, attrs in document.tags if tag == "link"]
                 rels = {attrs.get("rel") for attrs in links}
-                self.assertIn("canonical", rels)
+
+                if path.name == "404.html":
+                    # Error pages are neither indexed nor shared.
+                    self.assertIsNone(meta.get("description"))
+                    self.assertIsNone(meta.get("og:title"))
+                    self.assertIsNone(meta.get("og:description"))
+                    self.assertIsNone(meta.get("og:url"))
+                    self.assertIsNone(meta.get("og:type"))
+                    self.assertNotIn("canonical", rels)
+                else:
+                    self.assertTrue(meta.get("description"))
+                    self.assertTrue(meta.get("og:title"))
+                    self.assertTrue(meta.get("og:description"))
+                    self.assertTrue(meta.get("og:url"))
+                    self.assertTrue(meta.get("og:type"))
+                    self.assertIn("canonical", rels)
+
                 self.assertIn("alternate", rels)
                 self.assertIn("sitemap", rels)
 
@@ -109,6 +120,31 @@ class HtmlQualityTests(unittest.TestCase):
                 ]
                 self.assertEqual(len(nav), 1)
                 self.assertTrue(nav[0].get("aria-label"))
+
+    def test_error_page_keeps_chrome_without_seo_metadata(self) -> None:
+        page = self.root / "public/404.html"
+        document = _Document()
+        document.feed(page.read_text(encoding="utf-8"))
+        tags = [tag for tag, _ in document.tags]
+        attrs_by_tag = {tag: attrs for tag, attrs in document.tags}
+
+        self.assertTrue("".join(document.title_parts).strip())
+        self.assertEqual(tags.count("h1"), 1)
+        self.assertIn("main", tags)
+        self.assertTrue(attrs_by_tag["html"].get("lang"))
+
+        meta = {
+            attrs.get("name") or attrs.get("property"): attrs.get("content")
+            for tag, attrs in document.tags
+            if tag == "meta"
+        }
+        for key in ("description", "og:title", "og:description", "og:url", "og:type"):
+            self.assertIsNone(meta.get(key))
+
+        rels = {
+            attrs.get("rel") for tag, attrs in document.tags if tag == "link"
+        }
+        self.assertNotIn("canonical", rels)
 
 
 if __name__ == "__main__":  # pragma: no cover

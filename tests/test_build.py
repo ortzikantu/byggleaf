@@ -470,6 +470,10 @@ class BuildTests(unittest.TestCase):
         self.assertIn("The page you are looking for does not exist.", page)
         self.assertIn('href="https://example.com/"', page)
         self.assertNotIn("404.html", self.read("sitemap.xml"))
+        # Error pages are not indexed or shared: no SEO/social metadata.
+        self.assertNotIn('rel="canonical"', page)
+        self.assertNotIn('<meta name="description"', page)
+        self.assertNotIn('property="og:', page)
 
     def test_404_page_follows_the_site_language(self) -> None:
         self.set_language("zh-CN")

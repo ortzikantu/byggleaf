@@ -2,6 +2,13 @@
 
 本文件记录 ByggLeaf 的重要变更。版本号的唯一来源是 `pyproject.toml`。
 
+## 未发布
+
+### 变更
+
+- `404.html` 不再输出 description、canonical 与 Open Graph 元数据：错误页不应被
+  索引或分享，保留 `<title>`、`lang`、导航与页脚即可。
+
 ## 0.1.2
 
 ### 变更

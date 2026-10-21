@@ -4,6 +4,10 @@
 
 {% block title %}{{ meta_title }}{% endblock %}
 
+{# Error pages are neither indexed nor shared: omit description, canonical
+   and Open Graph metadata. #}
+{% block meta %}{% endblock %}
+
 {% block content %}
 <header class="page-header">
   <h1 class="page-title">{{ ui('not_found') }}</h1>
