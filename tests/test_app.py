@@ -197,9 +197,10 @@ class AppTests(unittest.TestCase):
             "this is not [ valid toml", encoding="utf-8"
         )
 
-        with mock.patch(
-            "byggleaf.core.server.serve", side_effect=lambda *a, **k: None
-        ):
+        def fake_serve(directory, *, host, port, on_ready=None):
+            on_ready(f"http://127.0.0.1:{port}/")
+
+        with mock.patch("byggleaf.core.server.serve", side_effect=fake_serve):
             code, _, error = self.run_app("serve")
         self.assertEqual(code, 0, error)
 

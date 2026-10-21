@@ -5,11 +5,13 @@ from __future__ import annotations
 import tempfile
 import tomllib
 import unittest
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 from unittest import mock
 
 from byggleaf.core.version import (
     VERSION,
+    _installed_version,
     _source_version,
     get_version,
     raw_version,
@@ -79,6 +81,31 @@ class VersionTests(unittest.TestCase):
                 side_effect=RuntimeError("pathological pyproject"),
             ):
                 self.assertEqual(_source_version(start=project), "")
+
+    def test_installed_version_reads_real_metadata(self) -> None:
+        # The editable install exposes distribution metadata in this environment.
+        self.assertRegex(_installed_version(), r"^\d")
+
+    def test_installed_version_falls_back_when_missing(self) -> None:
+        with mock.patch(
+            "importlib.metadata.version", side_effect=PackageNotFoundError
+        ):
+            self.assertEqual(_installed_version(), "")
+
+    def test_installed_version_survives_corrupt_metadata(self) -> None:
+        with mock.patch(
+            "importlib.metadata.version", side_effect=RuntimeError("broken")
+        ):
+            self.assertEqual(_installed_version(), "")
+
+    def test_source_version_skips_empty_versions(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "pyproject.toml").write_text(
+                '[project]\nname = "byggleaf"\nversion = ""\n',
+                encoding="utf-8",
+            )
+            self.assertEqual(_source_version(start=root), "")
 
     def test_reset_cache_forces_a_fresh_resolution(self) -> None:
         with mock.patch(

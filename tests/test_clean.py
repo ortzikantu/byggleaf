@@ -5,8 +5,9 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from byggleaf.core.clean import CleanResult, clean_output
+from byggleaf.core.clean import CleanError, CleanResult, clean_output
 
 
 class CleanTests(unittest.TestCase):
@@ -59,6 +60,22 @@ class CleanTests(unittest.TestCase):
         self.assertTrue(result.removed)
         self.assertEqual(result.kind, "file")
         self.assertFalse(public.exists())
+
+    def test_mount_point_is_refused(self) -> None:
+        public = self.root / "public"
+        public.mkdir()
+        with mock.patch("byggleaf.core.clean.os.path.ismount", return_value=True):
+            with self.assertRaisesRegex(CleanError, "mount point"):
+                clean_output(self.root)
+        self.assertTrue(public.is_dir())
+
+    def test_removal_error_is_reported(self) -> None:
+        (self.root / "public").mkdir()
+        with mock.patch(
+            "byggleaf.core.clean.shutil.rmtree", side_effect=OSError("denied")
+        ):
+            with self.assertRaisesRegex(CleanError, "cannot remove"):
+                clean_output(self.root)
 
 
 if __name__ == "__main__":  # pragma: no cover

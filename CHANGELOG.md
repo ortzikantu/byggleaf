@@ -2,7 +2,7 @@
 
 本文件记录 ByggLeaf 的重要变更。版本号的唯一来源是 `pyproject.toml`。
 
-## 未发布
+## 0.1.2
 
 ### 变更
 
@@ -10,6 +10,10 @@
   HTML 按底层 `markdown` 渲染器的输出原样保留，由内容作者自行负责；ByggLeaf 只
   保证自身模板、样式与静态资源不含 JavaScript。`baseurl` 对本地链接与资源 URL
   的重写保持不变。
+- 移除 CLI 的 ANSI 颜色输出：`NO_COLOR` / `FORCE_COLOR` 逻辑、颜色常量与未使用的
+  `Console.accent` 一并删除，终端输出改为纯文本。
+- 收敛死代码：简化 CLI 命令分发与 `init` 的配置写入分支，删除 Markdown front
+  matter 中不可达的类型检查与未使用的 URL 重写属性。
 
 ## 0.1.1
 

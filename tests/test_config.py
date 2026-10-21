@@ -176,6 +176,30 @@ class ConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ConfigError, "cannot read"):
             load_config(path)
 
+    def test_empty_title_is_rejected(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "must not be empty"):
+            load_config(self.write('[site]\ntitle = ""\nbaseurl = ""\n'))
+
+    def test_baseurl_slash_is_normalised_to_empty(self) -> None:
+        config = load_config(self.write('[site]\ntitle = "G"\nbaseurl = "/"\n'))
+        self.assertEqual(config.site.baseurl, "")
+
+    def test_projects_must_be_an_array_of_tables(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "array of tables"):
+            load_config(
+                self.write(
+                    'projects = "x"\n[site]\ntitle = "G"\nbaseurl = ""\n'
+                )
+            )
+
+    def test_project_entries_must_be_tables(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "must be a table"):
+            load_config(
+                self.write(
+                    "projects = [1]\n[site]\ntitle = \"G\"\nbaseurl = \"\"\n"
+                )
+            )
+
 
 if __name__ == "__main__":  # pragma: no cover
     unittest.main()

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import os
 import re
+import shutil
 import tempfile
 import tomllib
 import unittest
@@ -12,8 +14,9 @@ from unittest import mock
 
 from byggleaf.core import scaffold
 from byggleaf.core.builder import Builder, BuildError
-from byggleaf.core.config import load_config
+from byggleaf.core.config import Config, Site, load_config
 from byggleaf.core.scaffold import ScaffoldError
+from byggleaf.core.seo import render_rss
 from byggleaf.core.version import VERSION
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -65,6 +68,40 @@ class ScaffoldTests(unittest.TestCase):
         result = scaffold.init_site(self.root)
         self.assertEqual(about.read_text(encoding="utf-8"), "# Mine\n\nDo not touch.\n")
         self.assertIn(about, result.skipped)
+
+    def test_root_that_is_a_file_is_rejected(self) -> None:
+        target = self.root / "file"
+        target.write_text("x", encoding="utf-8")
+        with self.assertRaisesRegex(ScaffoldError, "not a directory"):
+            scaffold.init_site(target)
+
+    def test_missing_example_config_is_reported(self) -> None:
+        with mock.patch(
+            "byggleaf.core.scaffold.EXAMPLE_CONFIG", self.root / "missing.toml"
+        ):
+            with self.assertRaisesRegex(ScaffoldError, "example config"):
+                scaffold.init_site(self.root)
+
+    def test_workspace_directory_errors_are_reported(self) -> None:
+        with mock.patch("pathlib.Path.mkdir", side_effect=OSError("denied")):
+            with self.assertRaisesRegex(ScaffoldError, "workspace directories"):
+                scaffold.init_site(self.root)
+
+    def test_favicon_copy_error_is_reported(self) -> None:
+        with mock.patch(
+            "byggleaf.core.scaffold.shutil.copyfile",
+            side_effect=OSError("denied"),
+        ):
+            with self.assertRaisesRegex(ScaffoldError, "favicon"):
+                scaffold.init_site(self.root)
+
+    def test_missing_packaged_favicon_is_tolerated(self) -> None:
+        with mock.patch(
+            "byggleaf.core.scaffold.DEFAULT_FAVICON", self.root / "none.ico"
+        ):
+            result = scaffold.init_site(self.root)
+        self.assertFalse(result.favicon_copied)
+        self.assertFalse((self.root / "assets/img/favicon.ico").exists())
 
 
 class BuildTests(unittest.TestCase):
@@ -661,6 +698,161 @@ class BuildTests(unittest.TestCase):
         self.build()
         self.assertTrue((self.root / "public/index.html").is_file())
         self.assertEqual(list(self.root.glob(".byggleaf-public-*")), [])
+
+    def test_missing_packaged_stylesheet_is_a_build_error(self) -> None:
+        with mock.patch(
+            "byggleaf.core.builder.PACKAGE_ASSETS", self.root / "missing"
+        ):
+            with self.assertRaisesRegex(BuildError, "stylesheet"):
+                self.build()
+
+    def test_public_symlink_is_refused(self) -> None:
+        outside = self.root / "outside"
+        outside.mkdir()
+        (self.root / "public").symlink_to(outside, target_is_directory=True)
+        with self.assertRaisesRegex(BuildError, "symlink"):
+            self.build()
+        self.assertTrue(outside.is_dir())
+
+    def test_public_path_that_is_not_a_directory_is_refused(self) -> None:
+        (self.root / "public").write_text("x", encoding="utf-8")
+        with self.assertRaisesRegex(BuildError, "not a directory"):
+            self.build()
+
+    def test_recovery_cleans_backup_and_staging_leftovers(self) -> None:
+        self.build()
+        backup_dir = self.root / ".byggleaf-public-dir"
+        backup_file = self.root / ".byggleaf-public-file"
+        staging_file = self.root / ".byggleaf-build-file"
+        backup_dir.mkdir()
+        backup_file.write_text("x", encoding="utf-8")
+        staging_file.write_text("x", encoding="utf-8")
+
+        self.build()
+
+        self.assertFalse(backup_dir.exists())
+        self.assertFalse(backup_file.exists())
+        self.assertFalse(staging_file.exists())
+
+    def test_publish_failure_without_a_previous_site_publishes_nothing(self) -> None:
+        final = self.root / "public"
+        real_replace = os.replace
+
+        def replace(source: str | Path, destination: str | Path) -> None:
+            if (
+                Path(source).name.startswith(".byggleaf-build-")
+                and Path(destination) == final
+            ):
+                raise OSError("simulated publish failure")
+            real_replace(source, destination)
+
+        with mock.patch("byggleaf.core.builder.os.replace", side_effect=replace):
+            with self.assertRaisesRegex(BuildError, "simulated publish failure"):
+                self.build()
+
+        self.assertFalse(final.exists())
+        self.assertEqual(list(self.root.glob(".byggleaf-build-*")), [])
+
+    def test_publish_restore_failure_is_reported(self) -> None:
+        self.build()
+        final = self.root / "public"
+        real_replace = os.replace
+
+        def replace(source: str | Path, destination: str | Path) -> None:
+            source_name = Path(source).name
+            if (
+                source_name.startswith(".byggleaf-build-")
+                and Path(destination) == final
+            ):
+                raise OSError("publish failed")
+            if (
+                source_name.startswith(".byggleaf-public-")
+                and Path(destination) == final
+            ):
+                raise OSError("restore failed")
+            real_replace(source, destination)
+
+        with mock.patch("byggleaf.core.builder.os.replace", side_effect=replace):
+            with self.assertRaisesRegex(BuildError, "could not be restored"):
+                self.build()
+
+    def test_publish_refuses_a_non_directory_public(self) -> None:
+        builder = Builder(self.root, load_config(self.root / "byggleaf.toml"))
+        staging = self.root / ".byggleaf-build-manual"
+        staging.mkdir()
+        (self.root / "public").write_text("x", encoding="utf-8")
+
+        with self.assertRaisesRegex(BuildError, "not a replaceable directory"):
+            builder._publish(staging)
+
+    def test_absent_posts_directory_builds_an_empty_stream(self) -> None:
+        shutil.rmtree(self.root / "content/posts")
+        result = self.build()
+        self.assertEqual(result.posts, 0)
+        self.assertIn("Nothing has been planted", self.read("index.html"))
+
+    def test_directory_named_like_a_post_is_skipped(self) -> None:
+        (self.root / "content/posts/fake.md").mkdir()
+        result = self.build()
+        self.assertEqual(result.posts, 1)
+
+    def test_post_filename_with_backslash_is_rejected(self) -> None:
+        (self.root / "content/posts/weird\\name.md").write_text(
+            '+++\ntitle = "X"\ndate = 2024-01-01\n+++\n\nBody.\n',
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(BuildError, "unsafe post filename"):
+            self.build()
+
+    def test_content_index_md_does_not_replace_the_home_page(self) -> None:
+        (self.root / "content/index.md").write_text("# Home?\n", encoding="utf-8")
+        self.build()
+        self.assertIn("Hello, World", self.read("index.html"))
+
+    def test_index_md_inside_posts_is_not_a_custom_page(self) -> None:
+        page = self.root / "content/posts/notes/index.md"
+        page.parent.mkdir()
+        page.write_text("# Notes\n", encoding="utf-8")
+        self.build()
+        self.assertFalse((self.root / "public/posts/notes/index.html").exists())
+
+    def test_missing_user_asset_directory_is_skipped(self) -> None:
+        shutil.rmtree(self.root / "assets/video")
+        result = self.build()
+        self.assertEqual(result.assets, 2)
+
+    def test_directory_named_index_md_is_ignored(self) -> None:
+        (self.root / "content/notes/index.md").mkdir(parents=True)
+        self.build()
+        self.assertFalse((self.root / "public/notes/index.html").exists())
+
+    def test_target_requires_an_active_staging_directory(self) -> None:
+        builder = Builder(self.root, load_config(self.root / "byggleaf.toml"))
+        with self.assertRaisesRegex(BuildError, "staging"):
+            _ = builder._target
+
+    def test_keyboard_interrupt_cleans_staging_and_propagates(self) -> None:
+        with mock.patch.object(
+            Builder, "_materialize", side_effect=KeyboardInterrupt
+        ):
+            with self.assertRaises(KeyboardInterrupt):
+                self.build()
+        self.assertEqual(list(self.root.glob(".byggleaf-build-*")), [])
+
+    def test_rss_handles_timezone_aware_dates(self) -> None:
+        self.write_post("tz.md", "TZ", '"2026-01-01T00:00:00+08:00"')
+        self.build()
+        rss = self.read("rss.xml")
+        self.assertIn("<pubDate>Wed, 31 Dec 2025 16:00:00 GMT</pubDate>", rss)
+
+    def test_rss_without_copyright_accepts_a_naive_build_time(self) -> None:
+        config = Config(site=Site(title="Garden", baseurl=""))
+        rss = render_rss(config, [], build_time=dt.datetime(2026, 1, 1))
+        self.assertNotIn("<copyright>", rss)
+        self.assertIn(
+            "<lastBuildDate>Thu, 01 Jan 2026 00:00:00 GMT</lastBuildDate>",
+            rss,
+        )
 
 
 if __name__ == "__main__":  # pragma: no cover

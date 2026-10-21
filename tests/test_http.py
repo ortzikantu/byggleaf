@@ -228,6 +228,38 @@ class ServeWrapperTests(unittest.TestCase):
             self.assertEqual(observed["status"], 200)
             self.assertIn("preview works", str(observed["body"]))
 
+    def test_missing_path_without_a_404_page_uses_the_plain_404(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "index.html").write_text("<p>only</p>", encoding="utf-8")
+            httpd = make_server(root, host="127.0.0.1", port=0)
+            thread = threading.Thread(target=httpd.serve_forever, daemon=True)
+            thread.start()
+            port = httpd.server_address[1]
+            try:
+                connection = http.client.HTTPConnection(
+                    "127.0.0.1", port, timeout=5
+                )
+                try:
+                    connection.request("GET", "/missing/")
+                    response = connection.getresponse()
+                    self.assertEqual(response.status, 404)
+                    response.read()
+                finally:
+                    connection.close()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+                thread.join(timeout=5)
+
+    def test_serve_without_a_ready_callback_still_runs(self) -> None:
+        stub = _StubHttpServer("127.0.0.1", 6789)
+        with mock.patch(
+            "byggleaf.core.server.make_server", side_effect=lambda *a, **k: stub
+        ):
+            serve(Path("."), host="127.0.0.1", port=6789, on_ready=None)
+        self.assertTrue(stub.served)
+
     def test_wildcard_and_ipv6_hosts_get_a_reachable_display_url(self) -> None:
         cases = (
             ("0.0.0.0", "127.0.0.1"),

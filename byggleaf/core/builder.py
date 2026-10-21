@@ -3,8 +3,7 @@
 This is the only core module that knows the shape of a ByggLeaf project:
 ``content/`` in, ``public/`` out, with packaged CSS and the user's media
 copied alongside.  It composes the lower-level ``config``, ``markdown``,
-``jinja`` and ``server`` bases without knowing anything about argparse or
-terminal colours.
+``jinja`` and ``server`` bases without knowing anything about argparse.
 
 The build is deliberately three readable stages:
 

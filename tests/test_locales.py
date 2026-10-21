@@ -9,6 +9,7 @@ from unittest import mock
 
 from byggleaf.core.locales import (
     LOCALES_DIR,
+    Locale,
     LocaleError,
     canonicalize_language,
     load_locale,
@@ -88,6 +89,44 @@ class LocaleTests(unittest.TestCase):
                 self.assertEqual(locale.text("home"), "Home")
                 self.assertEqual(locale.text("about"), "about")
                 self.assertEqual(locale.text("empty"), "empty")
+
+    def test_language_tag_must_be_a_string(self) -> None:
+        with self.assertRaisesRegex(LocaleError, "must be a string"):
+            canonicalize_language(1)
+
+    def test_script_and_variant_subtags_are_canonicalised(self) -> None:
+        self.assertEqual(canonicalize_language("zh-hans"), "zh-Hans")
+        self.assertEqual(canonicalize_language("sl-rozaj"), "sl-rozaj")
+
+    def test_bad_translation_format_is_reported(self) -> None:
+        locale = Locale(language="en", strings={"k": "{missing}"})
+        with self.assertRaisesRegex(LocaleError, "cannot be formatted"):
+            locale.text("k")
+
+    def test_locale_file_without_ui_table_is_rejected(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "xx.toml").write_text(
+                'title = "x"\n', encoding="utf-8"
+            )
+            with mock.patch("byggleaf.core.locales.LOCALES_DIR", Path(directory)):
+                with self.assertRaisesRegex(LocaleError, r"\[ui\] table is required"):
+                    load_locale("xx")
+
+    def test_locale_values_must_be_strings(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "xx.toml").write_text(
+                "[ui]\nhome = 1\n", encoding="utf-8"
+            )
+            with mock.patch("byggleaf.core.locales.LOCALES_DIR", Path(directory)):
+                with self.assertRaisesRegex(LocaleError, "must be a string"):
+                    load_locale("xx")
+
+    def test_unreadable_locale_file_is_reported(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "xx.toml").write_text("[ui\n", encoding="utf-8")
+            with mock.patch("byggleaf.core.locales.LOCALES_DIR", Path(directory)):
+                with self.assertRaisesRegex(LocaleError, "cannot read locale"):
+                    load_locale("xx")
 
 
 if __name__ == "__main__":  # pragma: no cover

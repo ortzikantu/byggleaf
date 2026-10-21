@@ -6,6 +6,7 @@ import datetime as dt
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from byggleaf.core.markdown import parse_post
 from byggleaf.core.new import ARTICLE_TEMPLATE, NewError, create_article
@@ -58,6 +59,26 @@ class NewArticleTests(unittest.TestCase):
     def test_requires_an_initialized_workspace(self) -> None:
         (self.root / "byggleaf.toml").unlink()
         with self.assertRaisesRegex(NewError, "byggleaf.toml"):
+            create_article(self.root)
+
+    def test_unreadable_template_is_reported(self) -> None:
+        with mock.patch(
+            "byggleaf.core.new.ARTICLE_TEMPLATE", self.root / "missing.md"
+        ):
+            with self.assertRaisesRegex(NewError, "cannot read article template"):
+                create_article(self.root)
+
+    def test_template_without_placeholder_is_reported(self) -> None:
+        template = self.root / "template.md"
+        template.write_text("no placeholder here", encoding="utf-8")
+        with mock.patch("byggleaf.core.new.ARTICLE_TEMPLATE", template):
+            with self.assertRaisesRegex(NewError, "placeholder"):
+                create_article(self.root)
+
+    def test_unwritable_posts_directory_is_reported(self) -> None:
+        (self.root / "content").mkdir()
+        (self.root / "content/posts").write_text("x", encoding="utf-8")
+        with self.assertRaisesRegex(NewError, "cannot create article"):
             create_article(self.root)
 
 

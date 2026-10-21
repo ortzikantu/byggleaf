@@ -155,11 +155,10 @@ def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
     skipped: list[Path] = []
 
     # The config is written first so a failed init leaves an obvious, fixable
-    # signal rather than a half-populated content directory.
-    if _write_file(config_path, config_text, force=force):
-        created.append(config_path)
-    else:
-        skipped.append(config_path)
+    # signal rather than a half-populated content directory.  An existing
+    # config without --force has already raised above.
+    _write_file(config_path, config_text, force=force)
+    created.append(config_path)
 
     for relative_path, text in CONTENT_FILES.items():
         target = root / relative_path

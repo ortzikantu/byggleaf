@@ -12,20 +12,11 @@ The module imports only the standard library.
 from __future__ import annotations
 
 import argparse
-import os
 import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TextIO
-
-# ANSI colours.  These mirror the two accents of the design system: a deep
-# forest green for successful, living things and terracotta for attention.
-FOREST_GREEN = "\x1b[38;5;35m"
-TERRACOTTA = "\x1b[38;5;173m"
-DIM = "\x1b[2m"
-BOLD = "\x1b[1m"
-RESET = "\x1b[0m"
 
 # The command line deliberately does not import core.  These defaults are also
 # declared in core/server.py; a test pins the two values together.
@@ -33,27 +24,11 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 6789
 
 
-def _supports_colour(stream: TextIO) -> bool:
-    """Honour the usual colour conventions without ever forcing ANSI codes."""
-
-    if os.environ.get("NO_COLOR") is not None:
-        return False
-    if os.environ.get("FORCE_COLOR") is not None:
-        return True
-    if os.environ.get("TERM") == "dumb":
-        return False
-    return bool(getattr(stream, "isatty", lambda: False)())
-
-
 class Console:
     """Tiny, dependency-free writer for human-facing terminal output."""
 
-    def __init__(self, stream: TextIO | None = None, *, colour: bool | None = None) -> None:
+    def __init__(self, stream: TextIO | None = None) -> None:
         self.stream = stream if stream is not None else sys.stdout
-        self.colour = _supports_colour(self.stream) if colour is None else colour
-
-    def _paint(self, text: str, code: str) -> str:
-        return f"{code}{text}{RESET}" if self.colour else text
 
     def _line(self, text: str = "") -> None:
         self.stream.write(f"{text}\n")
@@ -62,25 +37,21 @@ class Console:
     def heading(self, text: str) -> None:
         """A command banner: ``ByggLeaf · build``."""
 
-        self._line(self._paint(f"ByggLeaf · {text}", BOLD + TERRACOTTA))
+        self._line(f"ByggLeaf · {text}")
 
     def success(self, text: str) -> None:
-        self._line(self._paint(text, FOREST_GREEN))
-
-    def accent(self, text: str) -> None:
-        self._line(self._paint(text, TERRACOTTA))
+        self._line(text)
 
     def muted(self, text: str) -> None:
-        self._line(self._paint(text, DIM))
+        self._line(text)
 
     def error(self, text: str) -> None:
-        self._line(self._paint(f"error: {text}", TERRACOTTA))
+        self._line(f"error: {text}")
 
     def item(self, label: str, value: str) -> None:
         """A quiet two-column detail line used by build/init summaries."""
 
-        label_text = self._paint(f"{label:<9}", FOREST_GREEN)
-        self._line(f"  {label_text}{value}")
+        self._line(f"  {label:<9}{value}")
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +203,20 @@ def build_parser(version: str = "unknown") -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+def _dispatch(args: argparse.Namespace, handlers: Handlers, root: Path) -> int:
+    """Call the injected handler for the parsed command."""
+
+    if args.command == "init":
+        return handlers.init(InitOptions(root=root, force=args.force))
+    if args.command == "build":
+        return handlers.build(BuildOptions(root=root))
+    if args.command == "clean":
+        return handlers.clean(CleanOptions(root=root))
+    if args.command == "new":
+        return handlers.new(NewOptions(root=root, kind=args.kind))
+    return handlers.serve(ServeOptions(root=root, host=args.host, port=args.port))
+
+
 def main(
     argv: Sequence[str] | None = None,
     *,
@@ -258,27 +243,11 @@ def main(
         )
         return 2
 
-    root = Path.cwd()
-
     try:
-        if args.command == "init":
-            return handlers.init(InitOptions(root=root, force=args.force))
-        if args.command == "build":
-            return handlers.build(BuildOptions(root=root))
-        if args.command == "clean":
-            return handlers.clean(CleanOptions(root=root))
-        if args.command == "new":
-            return handlers.new(NewOptions(root=root, kind=args.kind))
-        if args.command == "serve":
-            return handlers.serve(
-                ServeOptions(root=root, host=args.host, port=args.port)
-            )
+        return _dispatch(args, handlers, Path.cwd())
     except KeyboardInterrupt:
         # Ctrl+C is an ordinary way to leave a preview server, not an error.
         Console(stream=sys.stderr).muted("stopped.")
         return 130
     except BrokenPipeError:
         return 0
-
-    parser.error(f"unknown command: {args.command}")
-    return 2  # pragma: no cover - argparse.error always raises

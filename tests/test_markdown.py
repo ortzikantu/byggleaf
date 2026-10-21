@@ -6,9 +6,11 @@ import datetime as dt
 import tempfile
 import unittest
 from pathlib import Path
+from xml.etree.ElementTree import Element
 
 from byggleaf.core.markdown import (
     MarkdownError,
+    _BaseurlTreeprocessor,
     extract_leading_heading,
     parse_post,
     render_markdown,
@@ -256,6 +258,139 @@ class BaseurlUrlTests(unittest.TestCase):
         fragment = render_markdown("[root](/posts/)\n\n![leaf](assets/x.jpg)\n")
         self.assertIn('href="/posts/"', fragment)
         self.assertIn('src="/assets/x.jpg"', fragment)
+
+
+class FrontMatterErrorTests(unittest.TestCase):
+    """Front matter validation errors stay explicit and actionable."""
+
+    def setUp(self) -> None:
+        self.tempdir = tempfile.TemporaryDirectory()
+        self.root = Path(self.tempdir.name)
+
+    def tearDown(self) -> None:
+        self.tempdir.cleanup()
+
+    def write(self, text: str, name: str = "post.md") -> Path:
+        path = self.root / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def test_post_without_front_matter_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "title"):
+            parse_post(self.write("Just a body.\n"))
+
+    def test_invalid_toml_front_matter_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "invalid TOML"):
+            parse_post(self.write("+++\nthis is not toml\n+++\n\nBody.\n"))
+
+    def test_yaml_front_matter_skips_blank_and_comment_lines(self) -> None:
+        post = parse_post(
+            self.write(
+                "---\n"
+                "# a comment\n"
+                "\n"
+                'title: "YAML Post"\n'
+                "date: 2024-12-31\n"
+                "---\n\nBody.\n"
+            )
+        )
+        self.assertEqual(post.title, "YAML Post")
+
+    def test_yaml_front_matter_line_without_colon_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "key: value"):
+            parse_post(self.write('---\ntitle: "X"\nbroken\n---\n\nBody.\n'))
+
+    def test_yaml_front_matter_empty_key_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "empty front matter key"):
+            parse_post(self.write("---\n: value\n---\n\nBody.\n"))
+
+    def test_yaml_front_matter_unterminated_quote_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "unterminated quoted value"):
+            parse_post(
+                self.write(
+                    '---\ntitle: "unterminated\ndate: 2024-01-01\n---\n\nBody.\n'
+                )
+            )
+
+    def test_yaml_front_matter_invalid_literal_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "invalid quoted value"):
+            parse_post(
+                self.write('---\ntitle: "a" + "b"\ndate: 2024-01-01\n---\n\nBody.\n')
+            )
+
+    def test_empty_date_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "must not be empty"):
+            parse_post(self.write('+++\ntitle = "X"\ndate = ""\n+++\n\nBody.\n'))
+
+    def test_quoted_datetime_string_is_parsed(self) -> None:
+        post = parse_post(
+            self.write(
+                '+++\ntitle = "X"\ndate = "2026-10-18T14:30:45"\n+++\n\nBody.\n'
+            )
+        )
+        self.assertEqual(post.date, dt.datetime(2026, 10, 18, 14, 30, 45))
+
+    def test_non_date_value_is_rejected(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "date or date-time"):
+            parse_post(self.write('+++\ntitle = "X"\ndate = 123\n+++\n\nBody.\n'))
+
+    def test_author_must_be_a_string(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "author must be a string"):
+            parse_post(
+                self.write(
+                    '+++\ntitle = "X"\ndate = 2024-01-01\nauthor = 5\n+++\n\nBody.\n'
+                )
+            )
+
+    def test_tags_list_entries_must_be_strings(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "list of strings"):
+            parse_post(
+                self.write(
+                    '+++\ntitle = "X"\ndate = 2024-01-01\ntags = [1]\n+++\n\nBody.\n'
+                )
+            )
+
+    def test_tags_must_be_a_list_or_string(self) -> None:
+        with self.assertRaisesRegex(MarkdownError, "list or comma-separated"):
+            parse_post(
+                self.write(
+                    '+++\ntitle = "X"\ndate = 2024-01-01\ntags = 5\n+++\n\nBody.\n'
+                )
+            )
+
+    def test_timezone_aware_dates_sort_in_utc(self) -> None:
+        post = parse_post(
+            self.write(
+                '+++\ntitle = "TZ"\ndate = "2026-01-01T00:00:00+08:00"\n+++\n\nBody.\n'
+            )
+        )
+        self.assertEqual(post.published_timestamp, dt.datetime(2025, 12, 31, 16, 0))
+
+    def test_post_with_bom_is_parsed(self) -> None:
+        path = self.write(POST)
+        path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
+        self.assertEqual(parse_post(path).title, "Hello, World")
+
+    def test_unreadable_page_is_a_markdown_error(self) -> None:
+        path = self.root / "page.md"
+        path.write_bytes(b"\xff\xfe# Broken\n")
+        with self.assertRaisesRegex(MarkdownError, "cannot read"):
+            render_page(path, route="x")
+
+    def test_treeprocessor_skips_non_string_tags(self) -> None:
+        root = Element("div")
+        root.append(Element(1))  # comment-like tag, never a real element
+        processor = _BaseurlTreeprocessor("https://example.com")
+        self.assertIs(processor.run(root), root)
+
+
+class SummaryTests(unittest.TestCase):
+    def test_summary_without_spaces_is_truncated(self) -> None:
+        fragment = render_markdown("啊" * 300)
+        summary = summarize_html(fragment, limit=20)
+        self.assertEqual(len(summary), 21)
+        self.assertTrue(summary.endswith("…"))
 
 
 if __name__ == "__main__":  # pragma: no cover

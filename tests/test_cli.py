@@ -131,15 +131,68 @@ class CliTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 0)
         self.assertIn("ByggLeaf 9.8.7", stdout.getvalue())
 
-    def test_console_uses_ansi_when_enabled(self) -> None:
+    def test_console_writes_plain_columns(self) -> None:
         stream = io.StringIO()
-        console = cli.Console(stream, colour=True)
+        console = cli.Console(stream)
         console.heading("build")
         console.success("done")
-        output = stream.getvalue()
-        self.assertIn(cli.FOREST_GREEN, output)
-        self.assertIn(cli.TERRACOTTA, output)
-        self.assertIn(cli.RESET, output)
+        console.muted("note")
+        console.item("posts", "3")
+        console.error("boom")
+        lines = stream.getvalue().splitlines()
+        self.assertEqual(lines[0], "ByggLeaf · build")
+        self.assertEqual(lines[1], "done")
+        self.assertEqual(lines[2], "note")
+        self.assertEqual(lines[3], f"  {'posts':<9}3")
+        self.assertEqual(lines[4], "error: boom")
+        self.assertNotIn("\x1b", stream.getvalue())
+
+    def test_no_command_prints_help_and_exits_zero(self) -> None:
+        stdout = io.StringIO()
+        with contextlib.redirect_stdout(stdout):
+            code = cli.main([], handlers=None)
+        self.assertEqual(code, 0)
+        self.assertIn("usage:", stdout.getvalue())
+
+    def test_keyboard_interrupt_is_a_calm_exit(self) -> None:
+        base = self.handlers({})
+
+        def interrupted(options: cli.ServeOptions) -> int:
+            raise KeyboardInterrupt
+
+        handlers = cli.Handlers(
+            init=base.init,
+            build=base.build,
+            clean=base.clean,
+            new=base.new,
+            serve=interrupted,
+        )
+        stderr = io.StringIO()
+        with contextlib.redirect_stderr(stderr):
+            code = cli.main(["serve"], handlers=handlers)
+        self.assertEqual(code, 130)
+        self.assertIn("stopped.", stderr.getvalue())
+
+    def test_broken_pipe_is_a_calm_exit(self) -> None:
+        base = self.handlers({})
+
+        def broken(options: cli.ServeOptions) -> int:
+            raise BrokenPipeError
+
+        handlers = cli.Handlers(
+            init=base.init,
+            build=base.build,
+            clean=base.clean,
+            new=base.new,
+            serve=broken,
+        )
+        self.assertEqual(cli.main(["serve"], handlers=handlers), 0)
+
+    def test_non_integer_port_is_rejected(self) -> None:
+        with contextlib.redirect_stderr(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                cli.main(["serve", "--port", "abc"], handlers=self.handlers({}))
+        self.assertEqual(raised.exception.code, 2)
 
 
 if __name__ == "__main__":  # pragma: no cover

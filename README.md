@@ -383,13 +383,13 @@ Add locales/zh-SG.toml or contribute a translation.
 生成页面会包含：
 
 ```html
-<meta name="generator" content="ByggLeaf v0.1.1">
+<meta name="generator" content="ByggLeaf v0.1.2">
 ```
 
 以及 footer：
 
 ```html
-<p class="colophon">Built with ByggLeaf v0.1.1. No JavaScript or tracking added by ByggLeaf.</p>
+<p class="colophon">Built with ByggLeaf v0.1.2. No JavaScript or tracking added by ByggLeaf.</p>
 ```
 
 版本号直接来自当前的 `pyproject.toml`，不维护第二份字面量。
@@ -590,8 +590,8 @@ https://<owner>.github.io
 2. 手动创建并推送 tag：
 
 ```bash
-git tag -a v0.1.1 -m "ByggLeaf v0.1.1"
-git push origin v0.1.1
+git tag -a v0.1.2 -m "ByggLeaf v0.1.2"
+git push origin v0.1.2
 ```
 
 3. tag push 自动触发 [`.github/workflows/publish.yml`](.github/workflows/publish.yml)：
@@ -635,8 +635,3 @@ ByggLeaf 是自由软件，采用 **GNU General Public License v3.0 or later**
 （GPL-3.0-or-later）。完整文本见 [LICENSE](LICENSE)。
 
 你可以按 GPLv3 或任何更新版本使用、修改和分发它。ByggLeaf 不提供任何担保。
-
-## 终端颜色
-
-CLI 使用森林绿与陶土橙的 ANSI 颜色。遵循 `NO_COLOR` 约定；在非 TTY 环境中
-自动关闭颜色，设置 `FORCE_COLOR=1` 可强制开启。
