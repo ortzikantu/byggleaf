@@ -17,9 +17,10 @@ from .locales import LocaleError, canonicalize_language
 
 CONFIG_FILENAME = "byggleaf.toml"
 
-# URL schemes that can execute or smuggle code.  The Markdown sanitizer keeps
-# the same list for content; config-owned URLs (baseurl, project links) must
-# not become a back door into the zero-JavaScript promise.
+# URL schemes that can execute or smuggle code.  This is a configuration
+# constraint, independent of how Markdown content is rendered: ``baseurl`` and
+# project links are site configuration, so nonsensical or executable values
+# are rejected early instead of producing a broken site.
 _UNSAFE_URL_PREFIXES = (
     "javascript:",
     "vbscript:",
@@ -30,7 +31,7 @@ _URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
 
 
 def _unsafe_url(value: str) -> bool:
-    """True when a URL would execute code once a browser resolves it."""
+    """True when a configured URL could execute code once a browser resolves it."""
 
     compact = _URL_NOISE_RE.sub("", value).lower()
     return compact.startswith(_UNSAFE_URL_PREFIXES)

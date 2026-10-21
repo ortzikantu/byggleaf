@@ -2,6 +2,15 @@
 
 本文件记录 ByggLeaf 的重要变更。版本号的唯一来源是 `pyproject.toml`。
 
+## 未发布
+
+### 变更
+
+- 移除 Markdown 渲染流程中的自定义 HTML 安全过滤器：用户写入 Markdown 的原始
+  HTML 按底层 `markdown` 渲染器的输出原样保留，由内容作者自行负责；ByggLeaf 只
+  保证自身模板、样式与静态资源不含 JavaScript。`baseurl` 对本地链接与资源 URL
+  的重写保持不变。
+
 ## 0.1.1
 
 ### 新增

@@ -75,7 +75,7 @@ locales/yue.toml
 ## 提交请求
 
 - 保持架构单向：`app` 负责装配，`cli` 不导入 `core`，`core` 不导入入口层。
-- 不要向模板或 Markdown 输出加入 JavaScript。
+- 不要向模板、样式或 ByggLeaf 自身生成的输出加入 JavaScript（用户 Markdown 中的原始 HTML 由用户负责）。
 - 不要增加用户可覆盖的模板或主题钩子。
 - 每个行为变更都要有测试。
 - 用户可见输出保持克制、明确；错误要说明失败原因和下一步。

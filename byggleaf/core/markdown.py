@@ -6,23 +6,27 @@ does not pull in YAML either.  TOML front matter (``+++``) is the canonical
 format; a deliberately tiny, scalar-only YAML compatibility layer (``---``)
 avoids surprising people who arrive from other generators.
 
-Rendered HTML is sanitised before it reaches a template.  The promise is "No
-JS"; that promise should survive an accidentally pasted ``<script>`` tag.
+Rendered HTML goes straight to a template.  ByggLeaf does not filter or
+rewrite raw HTML authored in Markdown; that content belongs to the site
+owner.  The only transformation is applying ``baseurl`` to local links and
+media produced by the Markdown renderer.
 """
 
 from __future__ import annotations
 
 import ast
 import datetime as dt
-import html
 import re
 import tomllib
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import quote
+from xml.etree.ElementTree import Element
 
 import markdown as markdown_lib
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 
 from .config import absolute_url
 
@@ -31,57 +35,14 @@ class MarkdownError(ValueError):
     """A Markdown file could not be read, parsed, or validated."""
 
 
-# Elements that can execute or import code.  Their entire contents are dropped.
-_BLOCKED_TAGS = frozenset(
-    {
-        "applet",
-        "base",
-        "button",
-        "embed",
-        "form",
-        "frame",
-        "frameset",
-        "iframe",
-        "input",
-        "link",
-        "math",
-        "meta",
-        "noscript",
-        "object",
-        "option",
-        "script",
-        "select",
-        "style",
-        "svg",
-        "template",
-        "textarea",
-    }
-)
-
-# Attributes that can navigate to executable schemes or carry inline CSS/JS.
-_DROP_ATTRIBUTES = frozenset(
-    {
-        "action",
-        "formaction",
-        "srcdoc",
-        "style",
-        "xlink:href",
-    }
-)
-_URL_ATTRIBUTES = frozenset({"href", "src", "poster", "xlink:href"})
-_UNSAFE_URL_PREFIXES = (
-    "javascript:",
-    "vbscript:",
-    "data:text/html",
-    "data:image/svg",
-)
+# URL-bearing attributes on elements the Markdown renderer can produce.  Raw
+# HTML authored in the source is never parsed into that tree, so it reaches
+# the page exactly as written.
+_URL_ATTRIBUTES = ("href", "src")
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
-# Control characters and whitespace are ignored by browsers when resolving a
-# scheme; normalise before comparing so "java\nscript:" cannot slip through.
+# Control characters and whitespace can hide a scheme inside a URL; normalise
+# before deciding whether a value is a local path.
 _URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
-# Void elements never emit an end tag, so a blocked one must not leave the
-# sanitiser stuck in skip mode for the rest of the document.
-_BLOCKED_VOID_TAGS = frozenset({"base", "embed", "input", "link", "meta"})
 
 
 def _absolute_markdown_url(value: str, *, attribute: str, baseurl: str) -> str:
@@ -105,100 +66,55 @@ def _absolute_markdown_url(value: str, *, attribute: str, baseurl: str) -> str:
     return absolute_url(baseurl, stripped)
 
 
-class _Sanitizer(HTMLParser):
-    """Small HTML filter tailored to generated Markdown.
+class _BaseurlTreeprocessor(Treeprocessor):
+    """Apply ``baseurl`` to local links and media in rendered Markdown.
 
-    This is not a general-purpose security sanitiser.  It is a guard rail that
-    removes executable elements, event handlers, and script-bearing URLs from
-    the one input channel ByggLeaf has: Markdown authored by the site owner.
-    It also makes local image/media sources absolute using ``baseurl``.
+    Only elements produced by the Markdown renderer are visited.  Raw HTML
+    blocks written in the Markdown source are not parsed into this tree, so
+    they reach the page exactly as authored.
     """
 
-    def __init__(self, baseurl: str = "") -> None:
-        super().__init__(convert_charrefs=True)
+    def __init__(self, baseurl: str) -> None:
+        super().__init__()
         self.baseurl = baseurl
-        self._chunks: list[str] = []
-        # A stack rather than a single tag name: nested blocked tags such as
-        # "<script><script>x</script>y</script>" must not end the skip mode
-        # early and leak the text between the inner tags.  Mismatched end tags
-        # never pop the stack.
-        self._skip_stack: list[str] = []
 
-    def _attributes(self, attrs: list[tuple[str, str | None]]) -> str:
-        rendered: list[str] = []
-        for name, value in attrs:
-            lowered = name.lower()
-            if lowered in _DROP_ATTRIBUTES or lowered.startswith("on"):
+    def run(self, root: Element) -> Element:
+        for element in root.iter():
+            if not isinstance(element.tag, str):
                 continue
-            if value is None:
-                rendered.append(f" {html.escape(name, quote=True)}")
-                continue
-            if lowered in _URL_ATTRIBUTES:
-                compact = _URL_NOISE_RE.sub("", value).lower()
-                if compact.startswith(_UNSAFE_URL_PREFIXES):
-                    continue
-                value = _absolute_markdown_url(
-                    value, attribute=lowered, baseurl=self.baseurl
-                )
-            rendered.append(
-                f' {html.escape(name, quote=True)}="'
-                f'{html.escape(value, quote=True)}"'
-            )
-        return "".join(rendered)
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        lowered = tag.lower()
-        if lowered in _BLOCKED_TAGS:
-            if lowered not in _BLOCKED_VOID_TAGS:
-                self._skip_stack.append(lowered)
-            return
-        if self._skip_stack:
-            return
-        self._chunks.append(f"<{lowered}{self._attributes(attrs)}>")
-
-    def handle_startendtag(
-        self, tag: str, attrs: list[tuple[str, str | None]]
-    ) -> None:
-        lowered = tag.lower()
-        if self._skip_stack or lowered in _BLOCKED_TAGS:
-            return
-        self._chunks.append(f"<{lowered}{self._attributes(attrs)}>")
-
-    def handle_endtag(self, tag: str) -> None:
-        lowered = tag.lower()
-        if lowered in _BLOCKED_TAGS:
-            if self._skip_stack and lowered == self._skip_stack[-1]:
-                self._skip_stack.pop()
-            return
-        if self._skip_stack:
-            return
-        self._chunks.append(f"</{lowered}>")
-
-    def handle_data(self, data: str) -> None:
-        if not self._skip_stack:
-            self._chunks.append(html.escape(data, quote=False))
-
-    def result(self) -> str:
-        return "".join(self._chunks)
+            for attribute in _URL_ATTRIBUTES:
+                value = element.get(attribute)
+                if value:
+                    element.set(
+                        attribute,
+                        _absolute_markdown_url(
+                            value, attribute=attribute, baseurl=self.baseurl
+                        ),
+                    )
+        return root
 
 
-def sanitize_html(fragment: str, *, baseurl: str = "") -> str:
-    """Strip executable HTML and absolutise local Markdown asset URLs."""
+class _BaseurlExtension(Extension):
+    """Register :class:`_BaseurlTreeprocessor` for one render call."""
 
-    parser = _Sanitizer(baseurl=baseurl)
-    parser.feed(fragment)
-    parser.close()
-    return parser.result()
+    def __init__(self, baseurl: str) -> None:
+        super().__init__()
+        self.baseurl = baseurl
+
+    def extendMarkdown(self, md: markdown_lib.Markdown) -> None:
+        md.treeprocessors.register(
+            _BaseurlTreeprocessor(self.baseurl), "byggleaf-baseurl", 5
+        )
 
 
 def render_markdown(text: str, *, baseurl: str = "") -> str:
-    """Render Markdown to a sanitised HTML5 fragment."""
+    """Render Markdown to an HTML5 fragment, applying ``baseurl`` to local URLs."""
 
     renderer = markdown_lib.Markdown(
-        extensions=["extra", "sane_lists"],
+        extensions=["extra", "sane_lists", _BaseurlExtension(baseurl)],
         output_format="html5",
     )
-    return sanitize_html(renderer.convert(text), baseurl=baseurl)
+    return renderer.convert(text)
 
 
 # ---------------------------------------------------------------------------
@@ -266,10 +182,6 @@ def _split_front_matter(text: str, *, source: Path) -> tuple[dict[str, object], 
                 raise MarkdownError(
                     f"{source}: invalid quoted value on line {line_number}"
                 ) from exc
-            if not isinstance(parsed, str):
-                raise MarkdownError(
-                    f"{source}: front matter values must be strings on line {line_number}"
-                )
             value = parsed
         metadata[key] = value
     return metadata, body

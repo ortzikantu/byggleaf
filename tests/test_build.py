@@ -163,7 +163,7 @@ class BuildTests(unittest.TestCase):
             f'<meta name="generator" content="ByggLeaf {VERSION}">', home
         )
         self.assertIn(
-            f"Built with ByggLeaf {VERSION}. No JavaScript, no tracking.", home
+            f"Built with ByggLeaf {VERSION}. No JavaScript or tracking added by ByggLeaf.", home
         )
         self.assertIn('href="https://example.com/about/"', home)
         self.assertNotIn(">Posts</a>", home)
@@ -517,23 +517,36 @@ class BuildTests(unittest.TestCase):
         output = self.read("notes/index.html")
         self.assertIn('<h1 class="page-title">Notes</h1>', output)
 
-    def test_script_in_markdown_is_removed_from_every_output(self) -> None:
+    def test_raw_html_in_markdown_is_preserved_in_generated_pages(self) -> None:
+        # Raw HTML written by the author is not filtered by ByggLeaf.
         self.write_post(
-            "unsafe.md",
-            "Unsafe",
+            "raw-html.md",
+            "Raw HTML",
             "2026-01-01",
-            '<script>alert("x")</script>\n\n'
+            "<script>alert('x')</script>\n\n"
             '[click](javascript:alert(1))\n\n'
             '<img src="x" onerror="alert(2)">\n\n'
-            "Safe text.\n",
+            "Visible text.\n",
         )
         self.build()
-        for path in (self.root / "public").rglob("*.html"):
-            lowered = path.read_text(encoding="utf-8").lower()
-            with self.subTest(path=path.name):
-                self.assertNotIn("<script", lowered)
-                self.assertNotIn("javascript:", lowered)
-                self.assertNotIn("onerror", lowered)
+        post = self.read("posts/raw-html/index.html")
+        self.assertIn("<script>alert('x')</script>", post)
+        self.assertIn('href="javascript:alert(1)"', post)
+        self.assertIn('onerror="alert(2)"', post)
+        self.assertIn("Visible text.", post)
+
+    def test_raw_html_local_urls_are_not_rewritten(self) -> None:
+        self.write_post(
+            "raw-local.md",
+            "Raw Local",
+            "2026-01-01",
+            '<img src="assets/img/raw.jpg">\n\n'
+            '<a href="/about/">root</a>\n',
+        )
+        self.build()
+        post = self.read("posts/raw-local/index.html")
+        self.assertIn('src="assets/img/raw.jpg"', post)
+        self.assertIn('href="/about/"', post)
 
     def test_markdown_asset_urls_are_built_with_baseurl(self) -> None:
         self.write_post(

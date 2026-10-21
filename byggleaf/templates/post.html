@@ -44,7 +44,8 @@
     </p>
   </header>
 
-  {# Markdown output is sanitised in core/markdown.py before it reaches here. #}
+  {# Rendered by the markdown package; raw HTML written by the author is
+     passed through unchanged. #}
   <div class="prose">
     {{ post.html|safe }}
   </div>

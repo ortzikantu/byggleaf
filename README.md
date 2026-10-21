@@ -7,7 +7,7 @@ ByggLeaf 是一个极致克制、有主见的静态网站生成器。你写 Mark
 - Python 3.11+
 - 仅依赖 `markdown` 与 `jinja2`
 - 纯原生 CSS，构建时自动复制包内 `style.css`
-- 生成的页面零 JavaScript
+- 内置模板、样式与静态资源不含 JavaScript
 - 所有资源链接统一由 `baseurl` 拼接
 - 页面 `<head>` 输出版本化 generator，页脚输出版本化 Built with
 - 内置英语、日语、韩语、粤语、简体中文、繁体中文界面
@@ -389,13 +389,14 @@ Add locales/zh-SG.toml or contribute a translation.
 以及 footer：
 
 ```html
-<p class="colophon">Built with ByggLeaf v0.1.1. No JavaScript, no tracking.</p>
+<p class="colophon">Built with ByggLeaf v0.1.1. No JavaScript or tracking added by ByggLeaf.</p>
 ```
 
 版本号直接来自当前的 `pyproject.toml`，不维护第二份字面量。
 
-Markdown 渲染结果还会经过一个小型 HTML 过滤器，移除 `<script>`、事件处理器
-和 `javascript:` URL。即使误粘贴了原始 HTML，输出也保持零 JavaScript。
+Markdown 渲染结果直接使用 `markdown` 包的输出，ByggLeaf 不会过滤或改写用户写入
+Markdown 的原始 HTML：`<script>`、事件处理器和 `javascript:` 链接会原样出现在页面里。
+内置模板、样式与静态资源不含 JavaScript；原始 HTML 由内容作者自行负责。
 
 ## 构建失败与发布恢复
 
@@ -449,7 +450,8 @@ CI 在 Python 3.11 与 3.13 上运行同一套门禁，见
 测试使用标准库 `unittest`，并额外包含：
 
 - **HTML/无障碍结构检查**：`lang`、title、唯一 H1、`main#main`、唯一 id、
-  meta/canonical/OG、RSS/sitemap 发现链接、图片 alt、无 `<script>`。
+  meta/canonical/OG、RSS/sitemap 发现链接、图片 alt；内置模板生成的页面不含
+  `<script>`。
 - **HTTP 冒烟**：启动真实预览服务器，抓取首页、跟随分页链接到 `/page/2/`，
   并请求 `rss.xml` 与 `sitemap.xml`。
 - **本地化数据驱动测试**：扫描 `locales/*.toml`，不维护硬编码语言列表；

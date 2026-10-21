@@ -13,7 +13,6 @@ from byggleaf.core.markdown import (
     parse_post,
     render_markdown,
     render_page,
-    sanitize_html,
     summarize_html,
 )
 
@@ -144,29 +143,19 @@ class MarkdownTests(unittest.TestCase):
         with self.assertRaisesRegex(MarkdownError, "cannot read"):
             parse_post(path)
 
-    def test_raw_html_cannot_smuggle_javascript_into_output(self) -> None:
+    def test_raw_html_is_passed_through_unchanged(self) -> None:
+        # ByggLeaf does not filter raw HTML written by the author: the output
+        # is whatever the Markdown renderer produces.
         fragment = render_markdown(
-            "Before <link rel=\"stylesheet\" href=\"evil.css\"> after.\n\n"
             "<script>alert(1)</script>\n\n"
             '<img src="x" onerror="alert(2)">\n\n'
             "[bad](javascript:alert(3))\n\n"
-            "<style>body { display: none }</style>\n\n"
-            "Still visible.\n"
+            "Plain paragraph.\n"
         )
-        lowered = fragment.lower()
-        self.assertIn("after.", lowered)
-        self.assertIn("still visible.", lowered)
-        self.assertNotIn("<script", lowered)
-        self.assertNotIn("<style", lowered)
-        self.assertNotIn("<link", lowered)
-        self.assertNotIn("onerror", lowered)
-        self.assertNotIn("javascript:", lowered)
-
-    def test_blocked_void_tag_does_not_swallow_rest_of_document(self) -> None:
-        fragment = render_markdown('One <meta name="x" content="y"> two.')
-        self.assertIn("One", fragment)
-        self.assertIn("two.", fragment)
-        self.assertNotIn("<meta", fragment)
+        self.assertIn("<script>alert(1)</script>", fragment)
+        self.assertIn('onerror="alert(2)"', fragment)
+        self.assertIn('href="javascript:alert(3)"', fragment)
+        self.assertIn("Plain paragraph.", fragment)
 
     def test_leading_heading_extraction(self) -> None:
         title, body = extract_leading_heading("\n\n# Team\n\nWe build things.\n")
@@ -228,107 +217,45 @@ class MarkdownTests(unittest.TestCase):
         self.assertIn('href="#top"', fragment)
 
 
-class SanitizerEdgeCaseTests(unittest.TestCase):
-    """Boundary behaviour of the HTML guard rail that keeps output JS-free."""
+class BaseurlUrlTests(unittest.TestCase):
+    """Local URLs follow ``baseurl``; other URLs are left alone."""
 
-    def test_nested_blocked_tags_do_not_leak_interior_text(self) -> None:
-        # form is not a CDATA (raw text) element, so the nested start tag
-        # reaches the sanitizer on every supported Python version.
-        fragment = sanitize_html(
-            "<form><form>x</form>LEAK</form> after."
-        )
-        lowered = fragment.lower()
-        self.assertNotIn("<form", lowered)
-        self.assertNotIn("leak", lowered)
-        self.assertIn("after.", lowered)
-
-    def test_nested_script_is_consumed_as_raw_text_like_browsers(self) -> None:
-        # HTMLParser treats <script> as raw text, so the nested tag is part of
-        # the data and everything up to the first </script> is dropped.  The
-        # trailing "LEAK" is plain escaped text, exactly as a browser renders
-        # it; no <script> element survives.
-        fragment = sanitize_html("<script><script>alert(1)</script>LEAK</script>")
-        lowered = fragment.lower()
-        self.assertNotIn("<script", lowered)
-        self.assertNotIn("alert(1)", lowered)
-        self.assertIn("leak", lowered)
-
-    def test_mixed_nested_blocked_tags_are_dropped_entirely(self) -> None:
-        fragment = sanitize_html(
-            "<style><script>x</script>body { display: none }</style>\n\nAfter.\n"
-        )
-        lowered = fragment.lower()
-        self.assertNotIn("<style", lowered)
-        self.assertNotIn("<script", lowered)
-        self.assertNotIn("display: none", lowered)
-        self.assertIn("after.", lowered)
-
-    def test_mismatched_end_tags_do_not_end_skip_mode_early(self) -> None:
-        fragment = sanitize_html("<form>x</button>LEAK</form> tail.")
-        lowered = fragment.lower()
-        self.assertNotIn("leak", lowered)
-        self.assertIn("tail.", lowered)
-
-    def test_obfuscated_javascript_urls_are_dropped(self) -> None:
-        for payload in (
-            "java\nscript:alert(1)",
-            "java\tscript:alert(1)",
-            "JaVaScRiPt:alert(1)",
-            "vbscript:msgbox(1)",
-            "data:text/html,<script>",
-            "data:image/svg+xml,<svg>",
-        ):
-            with self.subTest(payload=payload):
-                fragment = sanitize_html(f'<a href="{payload}">x</a>')
-                self.assertNotIn("href", fragment.lower())
-                self.assertIn(">x</a>", fragment)
-
-    def test_character_reference_javascript_urls_are_dropped(self) -> None:
-        fragment = sanitize_html('<a href="java&#10;script:alert(1)">x</a>')
-        self.assertNotIn("href", fragment.lower())
-
-    def test_spaced_javascript_urls_are_dropped(self) -> None:
-        fragment = sanitize_html('<a href="ja va  script:alert(1)">x</a>')
-        self.assertNotIn("href", fragment.lower())
-
-    def test_event_handler_attributes_are_dropped_in_any_case(self) -> None:
-        fragment = sanitize_html(
-            '<img src="/x.png" onerror="alert(1)" ONCLICK="alert(2)">'
-        )
-        lowered = fragment.lower()
-        self.assertIn('src="/x.png"', lowered)
-        self.assertNotIn("onerror", lowered)
-        self.assertNotIn("onclick", lowered)
-
-    def test_inline_style_attribute_is_dropped_but_tag_survives(self) -> None:
-        fragment = sanitize_html('<p style="color:red">text</p>')
-        self.assertIn("<p>text</p>", fragment)
-        self.assertNotIn("style=", fragment)
-
-    def test_iframe_with_fallback_content_is_dropped(self) -> None:
-        fragment = sanitize_html(
-            '<iframe src="https://x">fallback text</iframe> after.'
-        )
-        lowered = fragment.lower()
-        self.assertNotIn("<iframe", lowered)
-        self.assertNotIn("fallback text", lowered)
-        self.assertIn("after.", lowered)
-
-    def test_attribute_ampersands_are_escaped(self) -> None:
-        fragment = sanitize_html('<a href="https://x/?a=1&b=2">x</a>')
-        self.assertIn('href="https://x/?a=1&amp;b=2"', fragment)
-
-    def test_integration_through_markdown_keeps_promise(self) -> None:
+    def test_subpath_baseurl_rewrites_root_relative_links_and_assets(self) -> None:
         fragment = render_markdown(
-            "<form><form>x</form>LEAK</form>\n\n"
-            '<a href="java\tscript:alert(2)">x</a>\n\n'
-            "Plain paragraph.\n"
+            "[root link](/posts/)\n\n"
+            "![leaf](assets/img/leaf.jpg)\n\n"
+            "[asset](/assets/img/leaf.jpg)\n",
+            baseurl="https://example.com/garden",
         )
-        lowered = fragment.lower()
-        self.assertNotIn("<form", lowered)
-        self.assertNotIn("leak", lowered)
-        self.assertNotIn("href", lowered)
-        self.assertIn("plain paragraph.", lowered)
+        self.assertIn('href="https://example.com/garden/posts/"', fragment)
+        self.assertIn(
+            'src="https://example.com/garden/assets/img/leaf.jpg"', fragment
+        )
+        self.assertIn(
+            'href="https://example.com/garden/assets/img/leaf.jpg"', fragment
+        )
+
+    def test_external_and_non_local_urls_are_left_alone(self) -> None:
+        fragment = render_markdown(
+            "[external](https://example.org/x)\n\n"
+            "[mail](mailto:a@example.org)\n\n"
+            "[cdn](//cdn.example.org/y)\n\n"
+            "[anchor](#top)\n\n"
+            "[query](?q=1)\n\n"
+            "[relative](../elsewhere/)\n",
+            baseurl="https://example.com/garden",
+        )
+        self.assertIn('href="https://example.org/x"', fragment)
+        self.assertIn('href="mailto:a@example.org"', fragment)
+        self.assertIn('href="//cdn.example.org/y"', fragment)
+        self.assertIn('href="#top"', fragment)
+        self.assertIn('href="?q=1"', fragment)
+        self.assertIn('href="../elsewhere/"', fragment)
+
+    def test_empty_baseurl_keeps_local_urls_root_relative(self) -> None:
+        fragment = render_markdown("[root](/posts/)\n\n![leaf](assets/x.jpg)\n")
+        self.assertIn('href="/posts/"', fragment)
+        self.assertIn('src="/assets/x.jpg"', fragment)
 
 
 if __name__ == "__main__":  # pragma: no cover
