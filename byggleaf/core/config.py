@@ -15,24 +15,17 @@ from typing import Any
 from .locales import LocaleError, canonicalize_language
 
 CONFIG_FILENAME = "byggleaf.toml"
+DEFAULT_LANGUAGE = "en"
+DEFAULT_POSTS_PER_PAGE = 5
 
-# 可执行/可夹带代码的 URL scheme。这是配置层面的约束，与 Markdown 内容
-# 怎么渲染无关：``baseurl`` 与项目链接属于站点配置，不合理或可执行的值
-# 应在解析阶段就拒绝，而不是生成一个坏掉的站点。
-_UNSAFE_URL_PREFIXES = (
-    "javascript:",
-    "vbscript:",
-    "data:text/html",
-    "data:image/svg",
-)
+# URL 里可能夹带控制字符/空白；拼接 baseurl 前先归一化再判断是不是本地路径。
 _URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
 
 
-def _unsafe_url(value: str) -> bool:
-    """配置中的 URL 若被浏览器解析后可能执行代码，返回 True。"""
+def compact_url(value: str) -> str:
+    """去掉 URL 里的控制字符/空白并转小写，用于 scheme 判定。"""
 
-    compact = _URL_NOISE_RE.sub("", value).lower()
-    return compact.startswith(_UNSAFE_URL_PREFIXES)
+    return _URL_NOISE_RE.sub("", value).lower()
 
 
 class ConfigError(ValueError):
@@ -71,8 +64,10 @@ class Site:
     baseurl: str
     hero_subtitle: str = ""
     copyright: str = ""
-    language: str = "en"
-    posts_per_page: int = 5
+    language: str = DEFAULT_LANGUAGE
+    posts_per_page: int = DEFAULT_POSTS_PER_PAGE
+    license: str = ""
+    license_url: str = ""
 
     def url(self, path: str) -> str:
         """把站点路径转成模板使用的绝对 URL。"""
@@ -142,10 +137,6 @@ def load_config(path: Path) -> Config:
     baseurl = _string(
         site_table, "baseurl", where="[site]", required=True, allow_empty=True
     )
-    if any(character.isspace() for character in baseurl):
-        raise ConfigError("[site].baseurl must not contain whitespace")
-    if _unsafe_url(baseurl):
-        raise ConfigError("[site].baseurl must not be an executable URL scheme")
     # 只归一化一次，模板与调用方都不用再考虑结尾斜杠。
     if baseurl == "/":
         baseurl = ""
@@ -154,13 +145,13 @@ def load_config(path: Path) -> Config:
 
     hero_subtitle = _string(site_table, "hero_subtitle", where="[site]")
     copyright_text = _string(site_table, "copyright", where="[site]")
-    raw_language = _string(site_table, "language", where="[site]") or "en"
+    raw_language = _string(site_table, "language", where="[site]") or DEFAULT_LANGUAGE
     try:
         language = canonicalize_language(raw_language)
     except LocaleError as exc:
         raise ConfigError(f"[site].language: {exc}") from exc
 
-    raw_posts_per_page = site_table.get("posts_per_page", 5)
+    raw_posts_per_page = site_table.get("posts_per_page", DEFAULT_POSTS_PER_PAGE)
     if (
         isinstance(raw_posts_per_page, bool)
         or not isinstance(raw_posts_per_page, int)
@@ -180,12 +171,7 @@ def load_config(path: Path) -> Config:
         name = _string(
             item, "name", where=f"projects[{index}]", required=True
         )
-        url = _string(item, "url", where=f"projects[{index}]", required=True)
-        if _unsafe_url(url):
-            raise ConfigError(
-                f"{path.name}: projects[{index}].url must not be an "
-                "executable URL scheme"
-            )
+        url = _string(item, "url", where=f"projects[{index}]")
         description = _string(item, "description", where=f"projects[{index}]")
         projects.append(Project(name=name, url=url, description=description))
 
@@ -196,5 +182,7 @@ def load_config(path: Path) -> Config:
         copyright=copyright_text,
         language=language,
         posts_per_page=posts_per_page,
+        license=_string(site_table, "license", where="[site]"),
+        license_url=_string(site_table, "license_url", where="[site]"),
     )
     return Config(site=site, projects=tuple(projects))

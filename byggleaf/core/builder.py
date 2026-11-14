@@ -32,10 +32,17 @@ import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .config import Config
-from .jinja import TemplateEngine
-from .locales import Locale, load_locale
-from .markdown import Page, Post, parse_post, render_page
+from .config import DEFAULT_LANGUAGE, Config
+from .jinja import TemplateEngine, TemplateError
+from .locales import Locale, LocaleError, load_locale
+from .markdown import (
+    Page,
+    Post,
+    is_draft,
+    parse_post,
+    read_front_matter,
+    render_page,
+)
 from .seo import SitemapEntry, render_robots, render_rss, render_sitemap
 
 PACKAGE_ASSETS = Path(__file__).resolve().parent.parent / "assets"
@@ -56,6 +63,7 @@ class BuildResult:
     assets: int
     favicon: str | None
     duration_seconds: float
+    notes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,18 +91,29 @@ class PreparedSite:
 class Pagination:
     """首页某一页的模板分页状态。"""
 
+    posts: tuple[Post, ...]
     current_page: int
     total_pages: int
-    previous_url: str | None
-    next_url: str | None
+
+    @property
+    def previous_url(self) -> str | None:
+        if self.current_page > 1:
+            return _pagination_url(self.current_page - 1)
+        return None
+
+    @property
+    def next_url(self) -> str | None:
+        if self.current_page < self.total_pages:
+            return _pagination_url(self.current_page + 1)
+        return None
 
 
 def _humanize_route(route: str) -> str:
     """index.md 开头没有 H1 时的回退标题。"""
 
-    last = route.rsplit("/", 1)[-1] or route
+    last = route.rstrip("/").rsplit("/", 1)[-1]
     words = last.replace("_", " ").replace("-", " ").strip()
-    return words.title() if words else "Page"
+    return words.title() or "Page"
 
 
 def _pagination_url(page_number: int) -> str:
@@ -106,15 +125,34 @@ def _pagination_url(page_number: int) -> str:
 class Builder:
     """渲染位于 ``root`` 的一个 ByggLeaf 项目。"""
 
-    def __init__(self, root: Path, config: Config) -> None:
+    def __init__(self, root: Path, config: Config, *, include_drafts: bool = False) -> None:
         self.root = Path(root).resolve()
         self.config = config
+        self.include_drafts = include_drafts
         self.content_dir = self.root / "content"
         self.assets_dir = self.root / "assets"
         self.output_dir = self.root / "public"
-        self.locale: Locale = load_locale(config.site.language)
-        self.templates = TemplateEngine(config, self.locale)
-        self._staging_dir: Path | None = None
+        self.notes: list[str] = []
+        try:
+            self.locale: Locale = load_locale(config.site.language)
+        except LocaleError as exc:
+            self.locale = self._fallback_locale(exc)
+        try:
+            self.templates = TemplateEngine(config, self.locale)
+        except TemplateError as exc:
+            raise BuildError(str(exc)) from exc
+
+    def _fallback_locale(self, exc: LocaleError) -> Locale:
+        """缺翻译文件不该挡住构建：回退英语，并把原因记进 notes。"""
+
+        if self.config.site.language == DEFAULT_LANGUAGE:
+            raise BuildError(str(exc)) from exc
+        try:
+            locale = load_locale(DEFAULT_LANGUAGE)
+        except LocaleError as nested:
+            raise BuildError(str(nested)) from nested
+        self.notes.append(f"{exc} Falling back to {DEFAULT_LANGUAGE!r}.")
+        return locale
 
     def _nav(self, active: str | None) -> list[dict[str, object]]:
         """恰好两个链接，按配置语言本地化。"""
@@ -132,14 +170,6 @@ class Builder:
             },
         ]
 
-    @property
-    def _target(self) -> Path:
-        """当前正在渲染的私有目录。"""
-
-        if self._staging_dir is None:
-            raise BuildError("build staging directory is not initialized")
-        return self._staging_dir
-
     # -- 公共入口 -----------------------------------------------------------
 
     def build(self) -> BuildResult:
@@ -152,25 +182,21 @@ class Builder:
         prepared = self._preflight()
 
         # 阶段 2：落地到私有 staging 目录；此时内容与模板错误已不可能发生。
-        staging = Path(
-            tempfile.mkdtemp(prefix=".byggleaf-build-", dir=self.root)
-        )
-        self._staging_dir = staging
-        assets = 0
         try:
-            # mkdtemp 默认 0700；发布出去的页面应保持可读。
-            staging.chmod(0o755)
-            assets = self._materialize(prepared)
-            self._publish(staging)
-        except BaseException as exc:
-            shutil.rmtree(staging, ignore_errors=True)
-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
-                raise
-            if isinstance(exc, BuildError):
-                raise
+            with tempfile.TemporaryDirectory(
+                prefix=".byggleaf-build-",
+                dir=self.root,
+                ignore_cleanup_errors=True,
+            ) as directory:
+                staging = Path(directory)
+                # 临时目录默认 0700；发布出去的页面应保持可读。
+                staging.chmod(0o755)
+                assets = self._materialize(staging, prepared)
+                self._publish(staging)
+        except (BuildError, KeyboardInterrupt, SystemExit):
+            raise
+        except Exception as exc:
             raise BuildError(f"build failed: {exc}") from exc
-        finally:
-            self._staging_dir = None
 
         return BuildResult(
             output_dir=self.output_dir,
@@ -179,6 +205,7 @@ class Builder:
             assets=assets,
             favicon=prepared.favicon,
             duration_seconds=time.perf_counter() - started,
+            notes=tuple(self.notes),
         )
 
     def _preflight(self) -> PreparedSite:
@@ -206,35 +233,37 @@ class Builder:
             files=tuple(files),
         )
 
-    def _materialize(self, prepared: PreparedSite) -> int:
+    def _materialize(self, staging: Path, prepared: PreparedSite) -> int:
         """复制资源，把预渲染的 HTML 写入 staging 目录。"""
 
-        assets = self._copy_stylesheet()
-        assets += self._copy_user_assets()
+        assets = self._copy_stylesheet(staging)
+        assets += self._copy_user_assets(staging)
         for rendered in prepared.files:
-            self._write_output(rendered.relative_path, rendered.content)
+            self._write_output(staging, rendered.relative_path, rendered.content)
         return assets
 
     # -- 校验与文件系统 -----------------------------------------------------
 
     def _validate_project(self) -> None:
-        if not self.content_dir.is_dir():
-            raise BuildError(
-                f"{self.content_dir} is missing; run `byggleaf init` first"
-            )
-
+        # 没有 content/ 也是合法站点：构建出一个只有首页骨架的空花园。
         stylesheet = PACKAGE_ASSETS / "css" / "style.css"
         if not stylesheet.is_file():
             raise BuildError(f"packaged stylesheet is missing: {stylesheet}")
 
-        if self.output_dir.is_symlink():
+        self._assert_replaceable_output()
+
+    def _assert_replaceable_output(self) -> None:
+        """public/ 必须可被替换；符号链接和非目录都拒绝。"""
+
+        target = self.output_dir
+        if target.is_symlink():
             # 拒绝递归删除不属于我们的东西。
             raise BuildError(
-                f"{self.output_dir} is a symlink; run `byggleaf clean` and build again"
+                f"{target} is a symlink; run `byggleaf clean` and build again"
             )
-        if self.output_dir.exists() and not self.output_dir.is_dir():
+        if target.exists() and not target.is_dir():
             raise BuildError(
-                f"{self.output_dir} exists but is not a directory; "
+                f"{target} exists but is not a directory; "
                 "run `byggleaf clean` and build again"
             )
 
@@ -245,7 +274,7 @@ class Builder:
         过期物；staging 目录永远可丢弃，在下一次构建开始时清理。
         """
 
-        backups = sorted(self.root.glob(".byggleaf-public-*"))
+        backups = list(self.root.glob(".byggleaf-public-*"))
         if (
             not self.output_dir.exists()
             and not self.output_dir.is_symlink()
@@ -255,17 +284,11 @@ class Builder:
             os.replace(newest, self.output_dir)
             backups.remove(newest)
 
-        for backup in backups:
-            if backup.is_dir():
-                shutil.rmtree(backup, ignore_errors=True)
+        for leftover in (*backups, *self.root.glob(".byggleaf-build-*")):
+            if leftover.is_dir():
+                shutil.rmtree(leftover, ignore_errors=True)
             else:
-                backup.unlink(missing_ok=True)
-
-        for staging in self.root.glob(".byggleaf-build-*"):
-            if staging.is_dir():
-                shutil.rmtree(staging, ignore_errors=True)
-            else:
-                staging.unlink(missing_ok=True)
+                leftover.unlink(missing_ok=True)
 
     def _publish(self, staging: Path) -> None:
         """把完成的 staging 目录切换到位。
@@ -278,10 +301,7 @@ class Builder:
         backup: Path | None = None
 
         if final.exists() or final.is_symlink():
-            if final.is_symlink() or not final.is_dir():
-                raise BuildError(
-                    f"{final} is not a replaceable directory; run `byggleaf clean`"
-                )
+            self._assert_replaceable_output()
             backup = self.root / f".byggleaf-public-{uuid.uuid4().hex}"
             os.replace(final, backup)
 
@@ -309,14 +329,14 @@ class Builder:
         candidate = self.assets_dir / "img" / "favicon.ico"
         return "/assets/img/favicon.ico" if candidate.is_file() else None
 
-    def _copy_stylesheet(self) -> int:
+    def _copy_stylesheet(self, staging: Path) -> int:
         source = PACKAGE_ASSETS / "css" / "style.css"
-        target = self._target / "assets" / "css" / "style.css"
+        target = staging / "assets" / "css" / "style.css"
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
         return 1
 
-    def _copy_user_assets(self) -> int:
+    def _copy_user_assets(self, staging: Path) -> int:
         """只复制媒体；用户 CSS/JS 没有进入页面的支持路径。"""
 
         copied = 0
@@ -324,8 +344,7 @@ class Builder:
             source = self.assets_dir / name
             if not source.is_dir():
                 continue
-            target = self._target / "assets" / name
-            target.parent.mkdir(parents=True, exist_ok=True)
+            target = staging / "assets" / name
             shutil.copytree(source, target, dirs_exist_ok=True)
             copied += sum(1 for item in source.rglob("*") if item.is_file())
         return copied
@@ -343,6 +362,9 @@ class Builder:
                 continue
             if path.stem in {"", ".", ".."} or "\\" in path.stem:
                 raise BuildError(f"{path}: unsafe post filename")
+            # 先只读元数据：草稿不必是完整文章，跳过时也不该被校验挡住。
+            if not self.include_drafts and is_draft(read_front_matter(path)):
+                continue
             posts.append(parse_post(path, baseurl=self.config.site.baseurl))
 
         # 最新在前；日期相同时用标题做稳定排序。
@@ -365,6 +387,8 @@ class Builder:
             if relative.parts[0] == "posts":
                 continue
             route = relative.as_posix()
+            if not self.include_drafts and is_draft(read_front_matter(path)):
+                continue
             page = render_page(
                 path,
                 route=route,
@@ -379,6 +403,20 @@ class Builder:
 
     # -- 渲染 ----------------------------------------------------------------
 
+    def _license(self, post: Post) -> tuple[str, str]:
+        """许可文字与链接；文章 front matter 覆盖站点默认，都没写就不显示。"""
+
+        site = self.config.site
+
+        def pick(key: str, fallback: str) -> str:
+            value = post.meta.get(key)
+            return value if isinstance(value, str) and value.strip() else fallback
+
+        return (
+            pick("license", site.license),
+            pick("license_url", site.license_url),
+        )
+
     def _render_site(
         self,
         posts: list[Post],
@@ -389,29 +427,26 @@ class Builder:
 
         files: list[OutputFile] = []
         site = self.config.site
+        fallback_description = site.hero_subtitle or site.title
         pagination_pages = self._paginate(posts)
-        post_back_urls = {
-            post.slug: _pagination_url(page_number)
-            for page_number, page_posts, _ in pagination_pages
-            for post in page_posts
-        }
         sitemap_entries: list[SitemapEntry] = [
-            SitemapEntry(path=_pagination_url(page_number))
-            for page_number, _, _ in pagination_pages
+            SitemapEntry(path=_pagination_url(pagination.current_page))
+            for pagination in pagination_pages
         ]
 
-        for page_number, page_posts, pagination in pagination_pages:
+        for pagination in pagination_pages:
+            page_number = pagination.current_page
             relative_path = (
                 Path("index.html")
                 if page_number == 1
-                else Path("page") / str(page_number) / "index.html"
+                else Path("page", str(page_number), "index.html")
             )
             files.append(
                 OutputFile(
                     relative_path=relative_path,
                     content=self.templates.render(
                         "home.html",
-                        posts=page_posts,
+                        posts=pagination.posts,
                         pagination=pagination,
                         nav=self._nav("home"),
                         favicon=favicon,
@@ -423,23 +458,34 @@ class Builder:
                                 f" · {site.title}"
                             )
                         ),
-                        meta_description=site.hero_subtitle or site.title,
+                        meta_description=fallback_description,
                         canonical_path=_pagination_url(page_number),
                         og_type="website",
                     ),
                 )
             )
 
-        for post in posts:
+        for index, post in enumerate(posts):
+            # posts 是最新在前：上一项更新，下一项更旧。
+            newer = posts[index - 1] if index > 0 else None
+            older = posts[index + 1] if index + 1 < len(posts) else None
+            license_text, license_url = self._license(post)
             files.append(
                 OutputFile(
                     relative_path=Path("posts") / post.slug / "index.html",
                     content=self.templates.render(
                         "post.html",
                         post=post,
-                        back_url=post_back_urls[post.slug],
+                        previous_post=older,
+                        next_post=newer,
+                        license_text=license_text,
+                        license_url=license_url,
                         nav=self._nav("home"),
                         favicon=favicon,
+                        meta_title=f"{post.title} · {site.title}",
+                        meta_description=post.summary or post.title,
+                        canonical_path=post.url,
+                        og_type="article",
                     ),
                 )
             )
@@ -461,11 +507,7 @@ class Builder:
                         nav=self._nav(active),
                         favicon=favicon,
                         meta_title=f"{page.title} · {site.title}",
-                        meta_description=(
-                            page.summary
-                            or site.hero_subtitle
-                            or site.title
-                        ),
+                        meta_description=page.summary or fallback_description,
                         canonical_path=page.url,
                         og_type="article",
                     ),
@@ -489,24 +531,15 @@ class Builder:
             )
         )
 
-        files.append(
-            OutputFile(
-                relative_path=Path("robots.txt"),
-                content=render_robots(self.config),
-            )
-        )
-
-        files.append(
-            OutputFile(
-                relative_path=Path("sitemap.xml"),
-                content=render_sitemap(self.config, sitemap_entries),
-            )
-        )
-        files.append(
-            OutputFile(
-                relative_path=Path("rss.xml"),
-                content=render_rss(self.config, posts),
-            )
+        files.extend(
+            [
+                OutputFile(Path("robots.txt"), render_robots(self.config)),
+                OutputFile(
+                    Path("sitemap.xml"),
+                    render_sitemap(self.config, sitemap_entries),
+                ),
+                OutputFile(Path("rss.xml"), render_rss(self.config, posts)),
+            ]
         )
         self._assert_unique_outputs(files)
         return files
@@ -521,33 +554,31 @@ class Builder:
                 raise BuildError(f"output path conflict: /{key}")
             seen.add(key)
 
-    def _paginate(self, posts: list[Post]) -> list[tuple[int, list[Post], Pagination]]:
+    def _paginate(self, posts: list[Post]) -> list[Pagination]:
         """按配置的每页数量，把文章切成首页分页。"""
 
         per_page = self.config.site.posts_per_page
         total_pages = max(1, (len(posts) + per_page - 1) // per_page)
-        result: list[tuple[int, list[Post], Pagination]] = []
+        pages: list[Pagination] = []
 
         for page_number in range(1, total_pages + 1):
             start = (page_number - 1) * per_page
-            page_posts = posts[start : start + per_page]
-            pagination = Pagination(
-                current_page=page_number,
-                total_pages=total_pages,
-                previous_url=(
-                    _pagination_url(page_number - 1) if page_number > 1 else None
-                ),
-                next_url=(
-                    _pagination_url(page_number + 1)
-                    if page_number < total_pages
-                    else None
-                ),
+            pages.append(
+                Pagination(
+                    posts=tuple(posts[start : start + per_page]),
+                    current_page=page_number,
+                    total_pages=total_pages,
+                )
             )
-            result.append((page_number, page_posts, pagination))
 
-        return result
+        return pages
 
-    def _write_output(self, relative: Path, content: str) -> None:
-        target = self._target / relative
+    def _write_output(
+        self,
+        staging: Path,
+        relative: Path,
+        content: str,
+    ) -> None:
+        target = staging / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content.rstrip() + "\n", encoding="utf-8")

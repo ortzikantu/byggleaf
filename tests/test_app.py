@@ -35,6 +35,27 @@ class AppTests(unittest.TestCase):
             code = app.main(list(args))
         return code, stdout.getvalue(), stderr.getvalue()
 
+    def test_build_prints_locale_fallback_note(self) -> None:
+        self.assertEqual(self.run_app("init")[0], 0)
+        config_path = self.root / "byggleaf.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8").replace(
+                'language = "zh-CN"', 'language = "zz"'
+            ),
+            encoding="utf-8",
+        )
+        code, output, error = self.run_app("build")
+        self.assertEqual(code, 0, error)
+        self.assertIn("note:", output)
+        self.assertIn("Falling back to 'en'", output)
+
+    def test_build_with_drafts_flag_reports_them(self) -> None:
+        self.assertEqual(self.run_app("init")[0], 0)
+        code, output, error = self.run_app("build", "--drafts")
+        self.assertEqual(code, 0, error)
+        self.assertIn("drafts", output)
+        self.assertIn("included", output)
+
     def test_init_build_new_and_clean_lifecycle(self) -> None:
         code, output, error = self.run_app("init")
         self.assertEqual(code, 0, error)
@@ -175,6 +196,25 @@ class AppTests(unittest.TestCase):
 
         with mock.patch("byggleaf.core.server.serve", side_effect=fake_serve):
             code, output, error = self.run_app("serve")
+        self.assertEqual(code, 0, error)
+        self.assertNotIn("note: pages use baseurl", output)
+
+    def test_serve_matches_ipv6_local_baseurl(self) -> None:
+        self.assertEqual(self.run_app("init")[0], 0)
+        self.assertEqual(self.run_app("build")[0], 0)
+        config_path = self.root / "byggleaf.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8").replace(
+                "https://example.com", "http://[::1]:6789"
+            ),
+            encoding="utf-8",
+        )
+
+        def fake_serve(directory, *, host, port, on_ready=None):
+            on_ready(f"http://[{host}]:{port}/")
+
+        with mock.patch("byggleaf.core.server.serve", side_effect=fake_serve):
+            code, output, error = self.run_app("serve", "--bind", "::1")
         self.assertEqual(code, 0, error)
         self.assertNotIn("note: pages use baseurl", output)
 

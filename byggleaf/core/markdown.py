@@ -15,7 +15,7 @@ import ast
 import datetime as dt
 import re
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import quote
@@ -25,7 +25,7 @@ import markdown as markdown_lib
 from markdown.extensions import Extension
 from markdown.treeprocessors import Treeprocessor
 
-from .config import absolute_url
+from .config import absolute_url, compact_url
 
 
 class MarkdownError(ValueError):
@@ -36,8 +36,6 @@ class MarkdownError(ValueError):
 # 这棵树，因此会原样到达页面。
 _URL_ATTRIBUTES = ("href", "src")
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.-]*:")
-# URL 里可能用控制字符/空白隐藏 scheme；判定本地路径前先做归一化。
-_URL_NOISE_RE = re.compile(r"[\x00-\x20]+")
 
 
 def _absolute_markdown_url(value: str, *, attribute: str, baseurl: str) -> str:
@@ -51,7 +49,7 @@ def _absolute_markdown_url(value: str, *, attribute: str, baseurl: str) -> str:
     stripped = value.strip()
     if not stripped or stripped.startswith(("#", "?", "//")):
         return value
-    compact = _URL_NOISE_RE.sub("", stripped).lower()
+    compact = compact_url(stripped)
     if _SCHEME_RE.match(compact):
         return value
     if attribute == "href" and not stripped.startswith("/"):
@@ -109,6 +107,16 @@ def render_markdown(text: str, *, baseurl: str = "") -> str:
     return renderer.convert(text)
 
 
+def _read_text(path: Path) -> str:
+    """读取 Markdown 源文件，并归一化 BOM 与换行。"""
+
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        raise MarkdownError(f"cannot read {path}: {exc}") from exc
+    return text.removeprefix("\ufeff").replace("\r\n", "\n").replace("\r", "\n")
+
+
 # ---------------------------------------------------------------------------
 # Front matter（元数据头）
 # ---------------------------------------------------------------------------
@@ -120,10 +128,6 @@ def _split_front_matter(text: str, *, source: Path) -> tuple[dict[str, object], 
     TOML 是受支持的格式；``---`` 块只接受扁平的 ``key: scalar`` 行——
     引入 YAML 解析器会破坏“两个依赖”的规则，也不符合项目口味。
     """
-
-    if text.startswith("\ufeff"):
-        text = text[1:]
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
 
     if not text.startswith(("+++\n", "---\n")):
         return {}, text
@@ -149,32 +153,19 @@ def _split_front_matter(text: str, *, source: Path) -> tuple[dict[str, object], 
         return toml_metadata, body
 
     metadata: dict[str, object] = {}
-    for line_number, line in enumerate(raw.splitlines(), start=2):
+    for line in raw.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        if ":" not in line:
-            raise MarkdownError(
-                f"{source}: front matter line {line_number} is not `key: value`"
-            )
-        key, value = line.split(":", 1)
-        key = key.strip()
+        key, _, value = line.partition(":")
         value = value.strip()
-        if not key:
-            raise MarkdownError(f"{source}: empty front matter key on line {line_number}")
-        if len(value) >= 2 and value[0] in {"'", '"'}:
-            if value[-1] != value[0]:
-                raise MarkdownError(
-                    f"{source}: unterminated quoted value on line {line_number}"
-                )
+        # 带引号的就当 Python 字面量解析；解析不了就原样留着，作者自己负责。
+        if len(value) >= 2 and value[0] in {"'", '"'} and value[-1] == value[0]:
             try:
-                parsed = ast.literal_eval(value)
-            except (ValueError, SyntaxError) as exc:
-                raise MarkdownError(
-                    f"{source}: invalid quoted value on line {line_number}"
-                ) from exc
-            value = parsed
-        metadata[key] = value
+                value = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                pass
+        metadata[key.strip()] = value
     return metadata, body
 
 
@@ -186,65 +177,83 @@ def _parse_date(value: object, *, source: Path, key: str = "date") -> DateValue:
         return value
     if isinstance(value, dt.date):
         return value
-    if isinstance(value, str):
-        candidate = value.strip()
-        if not candidate:
-            raise MarkdownError(f"{source}: front matter {key} must not be empty")
-        try:
-            if "T" in candidate or " " in candidate:
-                return dt.datetime.fromisoformat(candidate)
-            return dt.date.fromisoformat(candidate)
-        except ValueError:
-            try:
-                return dt.datetime.fromisoformat(candidate)
-            except ValueError as exc:
-                raise MarkdownError(
-                    f"{source}: invalid {key} {value!r}; "
-                    "use YYYY-MM-DD or an ISO date-time"
-                ) from exc
-    raise MarkdownError(
-        f"{source}: front matter {key} must be a date or date-time"
-    )
-
-
-def _parse_optional_date(
-    value: object,
-    *,
-    source: Path,
-    key: str,
-) -> DateValue | None:
-    if value is None:
-        return None
-    if isinstance(value, str) and not value.strip():
-        return None
-    return _parse_date(value, source=source, key=key)
-
-
-def _parse_author(value: object, *, source: Path) -> str:
-    if value is None:
-        return ""
     if not isinstance(value, str):
-        raise MarkdownError(f"{source}: front matter author must be a string")
-    return value.strip()
-
-
-def _parse_tags(metadata: dict[str, object], *, source: Path) -> tuple[str, ...]:
-    value = metadata.get("tags", metadata.get("tag"))
-    if value is None:
-        return ()
-    if isinstance(value, str):
-        items = [item.strip() for item in value.split(",")]
-    elif isinstance(value, list):
-        if not all(isinstance(item, str) for item in value):
-            raise MarkdownError(
-                f"{source}: front matter tags must be a list of strings"
-            )
-        items = [item.strip() for item in value]
-    else:
         raise MarkdownError(
-            f"{source}: front matter tags must be a list or comma-separated string"
+            f"{source}: front matter {key} must be a date or date-time"
         )
-    return tuple(item for item in items if item)
+    candidate = value.strip()
+    try:
+        return dt.date.fromisoformat(candidate)
+    except ValueError:
+        pass
+    try:
+        return dt.datetime.fromisoformat(candidate)
+    except ValueError as exc:
+        raise MarkdownError(
+            f"{source}: invalid {key} {value!r}; "
+            "use YYYY-MM-DD or an ISO date-time"
+        ) from exc
+
+
+def _lenient_date(value: object, *, source: Path, key: str) -> DateValue | None:
+    """可选的日期字段：写错就当没写。
+
+    ``updated`` 只影响 sitemap 的 lastmod，不值得为它挡住整次构建。
+    """
+
+    try:
+        return _parse_date(value, source=source, key=key)
+    except MarkdownError:
+        return None
+
+
+def _text_value(value: object) -> str:
+    """可选文本字段：非字符串一律视为空，类型由作者自己负责。"""
+
+    return value.strip() if isinstance(value, str) else ""
+
+
+_FALSE_WORDS = frozenset({"", "0", "false", "no", "off"})
+
+
+def _truthy(value: object) -> bool:
+    """把 front matter 的真假值统一成布尔。
+
+    TOML 给的是真正的布尔；``---`` 块给的是字符串，因此 ``false`` 也算假。
+    """
+
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() not in _FALSE_WORDS
+    return bool(value)
+
+
+def is_draft(metadata: dict[str, object]) -> bool:
+    """front matter 里的 ``draft`` 是否为真。"""
+
+    return _truthy(metadata.get("draft"))
+
+
+def _tag_values(value: object) -> tuple[str, ...]:
+    """tags 允许字符串或列表；其他类型安静地当作没有标签。"""
+
+    if isinstance(value, str):
+        items = value.split(",")
+    elif isinstance(value, (list, tuple)):
+        items = [item for item in value if isinstance(item, str)]
+    else:
+        return ()
+    return tuple(item.strip() for item in items if item.strip())
+
+
+def read_front_matter(path: Path) -> dict[str, object]:
+    """只读元数据、不渲染正文，让构建器提前跳过草稿。"""
+
+    path = Path(path)
+    metadata, _ = _split_front_matter(_read_text(path), source=path)
+    return metadata
+
 
 
 def _sortable_datetime(value: DateValue) -> dt.datetime:
@@ -291,11 +300,12 @@ def summarize_html(fragment: str, *, limit: int = 180) -> str:
     text = _text_from_html(paragraph.group(1) if paragraph else fragment)
     if len(text) <= limit:
         return text
-    shortened = text[:limit].rstrip()
+    head = text[:limit].rstrip()
     # 若限额附近存在词边界，优先在词边界截断。
-    if " " in shortened[limit // 2 :]:
-        shortened = shortened[: shortened.rfind(" ")].rstrip()
-    return shortened.rstrip(" ,.;:") + "…"
+    cut = head.rfind(" ")
+    if cut >= limit // 2:
+        head = head[:cut].rstrip()
+    return head.rstrip(" ,.;:") + "…"
 
 
 # ---------------------------------------------------------------------------
@@ -316,6 +326,8 @@ class Post:
     updated: DateValue | None = None
     author: str = ""
     tags: tuple[str, ...] = ()
+    draft: bool = False
+    meta: dict[str, object] = field(default_factory=dict)
 
     @property
     def url(self) -> str:
@@ -337,6 +349,8 @@ class Page:
     html: str
     summary: str
     source: Path
+    draft: bool = False
+    meta: dict[str, object] = field(default_factory=dict)
 
     @property
     def url(self) -> str:
@@ -347,21 +361,16 @@ def parse_post(path: Path, *, baseurl: str = "") -> Post:
     """读取一篇文章，校验 front matter 并渲染正文。"""
 
     path = Path(path)
-    try:
-        text = path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        raise MarkdownError(f"cannot read {path}: {exc}") from exc
+    text = _read_text(path)
 
     metadata, body = _split_front_matter(text, source=path)
     title = _required_title(metadata.get("title"), source=path)
     if "date" not in metadata:
         raise MarkdownError(f"{path}: front matter date is required")
     date = _parse_date(metadata["date"], source=path, key="date")
-    updated = _parse_optional_date(
-        metadata.get("updated"), source=path, key="updated"
-    )
-    author = _parse_author(metadata.get("author"), source=path)
-    tags = _parse_tags(metadata, source=path)
+    updated = _lenient_date(metadata.get("updated"), source=path, key="updated")
+    author = _text_value(metadata.get("author"))
+    tags = _tag_values(metadata.get("tags", metadata.get("tag")))
 
     # 正文开头常会重复一遍标题作为 H1；模板已负责可见标题，
     # 因此只删除与 title 完全相同的重复项，故意不同的 H1 保持原样。
@@ -380,6 +389,8 @@ def parse_post(path: Path, *, baseurl: str = "") -> Post:
         updated=updated,
         author=author,
         tags=tags,
+        draft=is_draft(metadata),
+        meta=metadata,
     )
 
 
@@ -411,24 +422,23 @@ def extract_leading_heading(text: str) -> tuple[str | None, str]:
 def render_page(
     path: Path, *, route: str | None = None, baseurl: str = ""
 ) -> Page:
-    """读取独立页面，并从开头的 H1 推导标题。"""
+    """读取独立页面，并从开头的 H1 推导标题。
+
+    页面也接受 front matter：``title`` 可覆盖 H1，``draft`` 让构建器跳过它；
+    其余键原样留在 ``page.meta`` 里，由模板决定要不要用。
+    """
 
     path = Path(path)
-    try:
-        text = path.read_text(encoding="utf-8")
-        if text.startswith("\ufeff"):
-            # 与 _split_front_matter 一致：UTF-8 BOM 不能干扰
-            # 标题检测，也不能泄漏进渲染正文。
-            text = text[1:]
-    except (OSError, UnicodeError) as exc:
-        raise MarkdownError(f"cannot read {path}: {exc}") from exc
+    metadata, rest = _split_front_matter(_read_text(path), source=path)
 
-    title, body = extract_leading_heading(text)
+    title, body = extract_leading_heading(rest)
     rendered = render_markdown(body, baseurl=baseurl)
     return Page(
-        title=title or "",
+        title=_text_value(metadata.get("title")) or title or "",
         route=route if route is not None else path.parent.name,
         html=rendered,
         summary=summarize_html(rendered),
         source=path,
+        draft=is_draft(metadata),
+        meta=metadata,
     )

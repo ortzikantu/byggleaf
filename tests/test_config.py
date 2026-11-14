@@ -107,40 +107,49 @@ class ConfigTests(unittest.TestCase):
                 self.write('[site]\ntitle = 42\nbaseurl = ""\n')
             )
 
-    def test_baseurl_rejects_whitespace(self) -> None:
-        with self.assertRaisesRegex(ConfigError, "whitespace"):
-            load_config(
-                self.write('[site]\ntitle = "Garden"\nbaseurl = "https://example.com/a b"\n')
-            )
+    def test_baseurl_is_not_scrutinised_for_whitespace(self) -> None:
+        config = load_config(
+            self.write('[site]\ntitle = "Garden"\nbaseurl = "https://example.com/a b"\n')
+        )
+        self.assertEqual(config.site.baseurl, "https://example.com/a b")
 
-    def test_baseurl_rejects_executable_schemes(self) -> None:
+    def test_baseurl_is_kept_verbatim(self) -> None:
+        """站点配置由作者负责，ByggLeaf 不再审查 URL scheme。"""
+
         for baseurl in (
             "javascript:alert(1)",
-            "VBScript:x",
             "data:text/html,<svg>",
-            "data:image/svg+xml,<svg>",
+            "https://example.com/a/b",
         ):
             with self.subTest(baseurl=baseurl):
-                with self.assertRaisesRegex(ConfigError, "executable"):
-                    load_config(
-                        self.write(
-                            '[site]\ntitle = "Garden"\n'
-                            f'baseurl = "{baseurl}"\n'
-                        )
+                config = load_config(
+                    self.write(
+                        '[site]\ntitle = "Garden"\n'
+                        f'baseurl = "{baseurl}"\n'
                     )
+                )
+                self.assertEqual(config.site.baseurl, baseurl)
 
-    def test_project_url_rejects_executable_schemes(self) -> None:
-        config = CONFIG.replace(
-            "https://github.com/example/lemovind", "javascript:alert(1)"
+    def test_project_url_is_kept_verbatim(self) -> None:
+        config = load_config(
+            self.write(
+                CONFIG.replace(
+                    "https://github.com/example/lemovind", "javascript:alert(1)"
+                )
+            )
         )
-        with self.assertRaisesRegex(ConfigError, "executable"):
-            load_config(self.write(config))
+        self.assertEqual(config.projects[0].url, "javascript:alert(1)")
 
     def test_ordinary_project_url_schemes_are_accepted(self) -> None:
         config = load_config(
             self.write(CONFIG.replace("https://example.com/byggleaf", "mailto:a@example.com"))
         )
         self.assertEqual(config.projects[1].url, "mailto:a@example.com")
+
+    def test_license_defaults_to_empty(self) -> None:
+        config = load_config(self.write(CONFIG))
+        self.assertEqual(config.site.license, "")
+        self.assertEqual(config.site.license_url, "")
 
     def test_language_is_canonicalized(self) -> None:
         config = load_config(

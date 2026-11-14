@@ -15,7 +15,7 @@
   <meta property="og:description" content="{{ meta_description }}">
   <meta property="og:url" content="{{ url(canonical_path) }}">
   {% endblock %}
-  <title>{% block title %}{{ site.title }}{% endblock %}</title>
+  <title>{{ meta_title }}</title>
   <link rel="alternate" type="application/rss+xml" title="{{ site.title }} RSS" href="{{ url('/rss.xml') }}">
   <link rel="sitemap" type="application/xml" href="{{ url('/sitemap.xml') }}">
   {% if favicon %}

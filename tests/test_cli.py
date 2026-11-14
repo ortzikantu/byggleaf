@@ -48,6 +48,15 @@ class CliTests(unittest.TestCase):
         options = captured["build"]
         self.assertIsInstance(options, cli.BuildOptions)
         self.assertEqual(options.root, Path.cwd())
+        self.assertFalse(options.drafts)
+
+    def test_build_drafts_flag(self) -> None:
+        captured: dict[str, object] = {}
+        code = cli.main(["build", "--drafts"], handlers=self.handlers(captured))
+        self.assertEqual(code, 0)
+        options = captured["build"]
+        self.assertIsInstance(options, cli.BuildOptions)
+        self.assertTrue(options.drafts)
 
     def test_init_force_flag(self) -> None:
         captured: dict[str, object] = {}

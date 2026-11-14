@@ -15,6 +15,8 @@ from unittest import mock
 from byggleaf.core import scaffold
 from byggleaf.core.builder import Builder, BuildError
 from byggleaf.core.config import Config, Site, load_config
+from byggleaf.core.jinja import TemplateError
+from byggleaf.core.locales import LocaleError
 from byggleaf.core.scaffold import ScaffoldError
 from byggleaf.core.seo import render_rss
 from byggleaf.core.version import VERSION
@@ -45,7 +47,7 @@ class ScaffoldTests(unittest.TestCase):
             with self.subTest(path=relative):
                 self.assertTrue((self.root / relative).exists())
         self.assertGreater((self.root / "assets/img/favicon.ico").stat().st_size, 0)
-        self.assertTrue(result.favicon_copied)
+        self.assertIn(self.root / "assets/img/favicon.ico", result.created)
         self.assertEqual(len(result.created), 5)
 
     def test_second_init_refuses_to_clobber_without_force(self) -> None:
@@ -100,7 +102,7 @@ class ScaffoldTests(unittest.TestCase):
             "byggleaf.core.scaffold.DEFAULT_FAVICON", self.root / "none.ico"
         ):
             result = scaffold.init_site(self.root)
-        self.assertFalse(result.favicon_copied)
+        self.assertNotIn(self.root / "assets/img/favicon.ico", result.created)
         self.assertFalse((self.root / "assets/img/favicon.ico").exists())
 
 
@@ -134,14 +136,17 @@ class BuildTests(unittest.TestCase):
     def read(self, relative: str) -> str:
         return (self.root / "public" / relative).read_text(encoding="utf-8")
 
-    def back_link(self, slug: str) -> str:
+    def nav_links(self, slug: str) -> dict[str, str]:
+        """文章底部的上下篇链接，按 rel 归键；没有邻居时返回空字典。"""
+
         post = self.read(f"posts/{slug}/index.html")
-        match = re.search(
-            r'<nav class="post-footer-nav"[^>]*>\s*<a href="([^"]+)"',
-            post,
-        )
-        self.assertIsNotNone(match)
-        return match.group(1)
+        return {
+            rel: href
+            for href, rel in re.findall(
+                r'<a href="([^"]+)" rel="(prev|next)"',
+                post,
+            )
+        }
 
     def example_project_name(self) -> str:
         """打包示例配置里的第一个项目名。"""
@@ -168,6 +173,117 @@ class BuildTests(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+
+    def set_site_option(self, line: str) -> None:
+        """往 [site] 块插入一行配置（不能直接 append，否则落进 [[projects]]）。"""
+
+        path = self.root / "byggleaf.toml"
+        text = path.read_text(encoding="utf-8")
+        marker = "\n[[projects]]"
+        path.write_text(text.replace(marker, f"\n{line}{marker}", 1), encoding="utf-8")
+
+    def write_draft(self, name: str, *, title: str = "Draft") -> None:
+        path = self.root / "content" / "posts" / name
+        path.write_text(
+            f'+++\ntitle = "{title}"\ndate = 2026-01-01\ndraft = true\n+++\n\nDraft body.\n',
+            encoding="utf-8",
+        )
+
+    def test_site_license_appears_on_posts_with_a_head_link(self) -> None:
+        self.set_site_option(
+            'license = "CC BY-NC-SA 4.0"\n'
+            'license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"'
+        )
+        self.build()
+
+        post = self.read("posts/hello-world/index.html")
+        self.assertIn('<link rel="license" href="https://creativecommons.org/', post)
+        self.assertIn(
+            '<a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" '
+            'rel="license">CC BY-NC-SA 4.0</a>',
+            post,
+        )
+        # 独立页面没有许可，也不该出现版权块。
+        self.assertNotIn('rel="license"', self.read("about/index.html"))
+
+    def test_post_license_overrides_the_site_default(self) -> None:
+        self.set_site_option(
+            'license = "CC BY 4.0"\nlicense_url = "https://example.com/site-license"'
+        )
+        (self.root / "content/posts/hello-world.md").write_text(
+            '+++\ntitle = "Hello, World"\ndate = 2025-01-01\n'
+            'license = "WTFPL"\nlicense_url = "https://example.com/wtfpl"\n+++\n\nBody.\n',
+            encoding="utf-8",
+        )
+        self.build()
+        post = self.read("posts/hello-world/index.html")
+        self.assertIn('rel="license">WTFPL</a>', post)
+        self.assertIn('href="https://example.com/wtfpl"', post)
+        self.assertNotIn("site-license", post)
+
+    def test_license_without_url_is_plain_text(self) -> None:
+        self.set_site_option('license = "CC0 1.0"')
+        self.build()
+        post = self.read("posts/hello-world/index.html")
+        self.assertIn('class="post-license"', post)
+        self.assertIn("Licensed under", post)
+        self.assertIn("CC0 1.0", post)
+        self.assertNotIn('rel="license"', post)
+
+    def test_no_license_renders_nothing(self) -> None:
+        self.build()
+        self.assertNotIn("post-license", self.read("posts/hello-world/index.html"))
+
+    def test_drafts_are_skipped_by_default(self) -> None:
+        self.write_draft("secret.md")
+        result = self.build()
+        self.assertEqual(result.posts, 1)
+        self.assertFalse((self.root / "public/posts/secret/index.html").exists())
+        self.assertNotIn("secret", self.read("sitemap.xml"))
+        self.assertNotIn("Draft", self.read("rss.xml"))
+
+    def test_drafts_are_built_when_requested(self) -> None:
+        self.write_draft("secret.md")
+        config = load_config(self.root / "byggleaf.toml")
+        result = Builder(self.root, config, include_drafts=True).build()
+        self.assertEqual(result.posts, 2)
+        self.assertTrue((self.root / "public/posts/secret/index.html").is_file())
+
+    def test_incomplete_draft_does_not_break_the_build(self) -> None:
+        path = self.root / "content" / "posts" / "wip.md"
+        path.write_text(
+            "+++\ndraft = true\n+++\n\nNo title or date yet.\n", encoding="utf-8"
+        )
+        self.assertEqual(self.build().posts, 1)
+
+    def test_incomplete_draft_fails_only_when_drafts_are_built(self) -> None:
+        path = self.root / "content" / "posts" / "wip.md"
+        path.write_text("+++\ndraft = true\n+++\n\nHalf done.\n", encoding="utf-8")
+        config = load_config(self.root / "byggleaf.toml")
+        with self.assertRaisesRegex(BuildError, "title is required"):
+            Builder(self.root, config, include_drafts=True).build()
+
+    def test_draft_pages_are_skipped_by_default(self) -> None:
+        path = self.root / "content" / "notes" / "index.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            "+++\ndraft = true\n+++\n\n# Notes\n\nSoon.\n", encoding="utf-8"
+        )
+        result = self.build()
+        self.assertEqual(result.pages, 2)
+        self.assertFalse((self.root / "public/notes/index.html").exists())
+
+    def test_page_front_matter_can_supply_the_title(self) -> None:
+        path = self.root / "content" / "notes" / "index.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            '+++\ntitle = "Meta Title"\n+++\n\n# Heading\n\nBody.\n',
+            encoding="utf-8",
+        )
+        self.build()
+        html = self.read("notes/index.html")
+        self.assertIn("Meta Title", html)
+        self.assertNotIn("<title>Heading", html)
 
     def test_builds_home_posts_pages_and_assets(self) -> None:
         result = self.build()
@@ -221,7 +337,7 @@ class BuildTests(unittest.TestCase):
         post = self.read("posts/hello-world/index.html")
         self.assertEqual(post.count("<h1"), 1)
         self.assertIn('<time datetime="2025-01-01">2025-01-01</time>', post)
-        self.assertEqual(self.back_link("hello-world"), "https://example.com/")
+        self.assertEqual(self.nav_links("hello-world"), {})
 
         about = self.read("about/index.html")
         self.assertIn('<h1 class="page-title">About</h1>', about)
@@ -289,9 +405,22 @@ class BuildTests(unittest.TestCase):
         self.assertIn('href="https://example.com/page/2/" rel="prev"', third)
         self.assertNotIn('rel="next"', third)
 
-        self.assertEqual(self.back_link("april"), "https://example.com/")
-        self.assertEqual(self.back_link("february"), "https://example.com/page/2/")
-        self.assertEqual(self.back_link("hello-world"), "https://example.com/page/3/")
+        april = self.read("posts/april/index.html")
+        self.assertIn("← Previous post</a>", april)
+        self.assertNotIn("post-nav-title", april)
+        self.assertEqual(
+            self.nav_links("april"), {"prev": "https://example.com/posts/march/"}
+        )
+        self.assertEqual(
+            self.nav_links("march"),
+            {
+                "prev": "https://example.com/posts/february/",
+                "next": "https://example.com/posts/april/",
+            },
+        )
+        self.assertEqual(
+            self.nav_links("hello-world"), {"next": "https://example.com/posts/january/"}
+        )
 
         sitemap = self.read("sitemap.xml")
         self.assertIn(
@@ -388,6 +517,8 @@ class BuildTests(unittest.TestCase):
 
     def test_language_localizes_generated_ui(self) -> None:
         self.set_language("zh-CN")
+        # 两篇文章，底部才会有上下篇导航。
+        self.write_post("second.md", "Second", "2025-02-01")
         self.build()
 
         home = self.read("index.html")
@@ -400,7 +531,7 @@ class BuildTests(unittest.TestCase):
         self.assertIn(f"由 ByggLeaf {VERSION} 生成", home)
 
         post = self.read("posts/hello-world/index.html")
-        self.assertIn("← 全部文章", post)
+        self.assertIn("下一篇", post)
         self.assertIn('aria-label="文章导航"', post)
 
     def test_traditional_chinese_language(self) -> None:
@@ -441,7 +572,7 @@ class BuildTests(unittest.TestCase):
         home = self.read("index.html")
         self.assertIn('href="/assets/css/style.css"', home)
         self.assertIn('href="/posts/hello-world/"', home)
-        self.assertEqual(self.back_link("hello-world"), "/")
+        self.assertEqual(self.nav_links("hello-world"), {})
 
     def test_robots_txt_points_to_the_sitemap(self) -> None:
         self.build()
@@ -603,10 +734,46 @@ class BuildTests(unittest.TestCase):
         )
         self.assertIn('href="https://example.com/about/"', post)
 
-    def test_missing_content_directory_is_a_build_error(self) -> None:
+    def test_missing_content_directory_builds_an_empty_garden(self) -> None:
         (self.root / "content").rename(self.root / "content-away")
-        with self.assertRaisesRegex(BuildError, "content"):
-            self.build()
+        result = self.build()
+        self.assertEqual(result.posts, 0)
+        self.assertEqual(result.pages, 0)
+        self.assertIn("empty-state", self.read("index.html"))
+
+    def test_missing_locale_falls_back_to_english_with_a_note(self) -> None:
+        config = Config(site=Site(title="Garden", baseurl="", language="zz"))
+        result = Builder(self.root, config).build()
+        self.assertEqual(len(result.notes), 1)
+        self.assertIn("no translation file", result.notes[0])
+        self.assertIn("Falling back to 'en'", result.notes[0])
+
+    def test_english_locale_missing_is_still_an_error(self) -> None:
+        config = Config(site=Site(title="Garden", baseurl="", language="en"))
+        with mock.patch(
+            "byggleaf.core.builder.load_locale",
+            side_effect=LocaleError("no translation file"),
+        ):
+            with self.assertRaisesRegex(BuildError, "no translation file"):
+                Builder(self.root, config)
+
+    def test_fallback_locale_missing_is_still_an_error(self) -> None:
+        config = Config(site=Site(title="Garden", baseurl="", language="zz"))
+        with mock.patch(
+            "byggleaf.core.builder.load_locale",
+            side_effect=LocaleError("no translation file"),
+        ):
+            with self.assertRaisesRegex(BuildError, "no translation file"):
+                Builder(self.root, config)
+
+    def test_template_assembly_error_is_reported_as_a_build_error(self) -> None:
+        config = load_config(self.root / "byggleaf.toml")
+        with mock.patch(
+            "byggleaf.core.builder.TemplateEngine",
+            side_effect=TemplateError("broken templates"),
+        ):
+            with self.assertRaisesRegex(BuildError, "broken templates"):
+                Builder(self.root, config)
 
     def test_failed_build_keeps_the_previous_public_tree(self) -> None:
         self.build()
@@ -786,7 +953,7 @@ class BuildTests(unittest.TestCase):
         staging.mkdir()
         (self.root / "public").write_text("x", encoding="utf-8")
 
-        with self.assertRaisesRegex(BuildError, "not a replaceable directory"):
+        with self.assertRaisesRegex(BuildError, "not a directory"):
             builder._publish(staging)
 
     def test_absent_posts_directory_builds_an_empty_stream(self) -> None:
@@ -829,11 +996,6 @@ class BuildTests(unittest.TestCase):
         (self.root / "content/notes/index.md").mkdir(parents=True)
         self.build()
         self.assertFalse((self.root / "public/notes/index.html").exists())
-
-    def test_target_requires_an_active_staging_directory(self) -> None:
-        builder = Builder(self.root, load_config(self.root / "byggleaf.toml"))
-        with self.assertRaisesRegex(BuildError, "staging"):
-            _ = builder._target
 
     def test_keyboard_interrupt_cleans_staging_and_propagates(self) -> None:
         with mock.patch.object(

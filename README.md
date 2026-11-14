@@ -131,6 +131,13 @@ tags = []
 - `author`：作者名，留空则不显示；填写后显示在文章头部和 SEO meta 中。
 - `tags`：仅用于 SEO，不生成标签页或标签链接；可写 `["a", "b"]`，
   也兼容 `tag = "a, b"` 字符串。
+- `draft`：设为 `true` 时默认不构建；`byggleaf build --drafts` 才输出。默认构建
+  完全跳过草稿，所以它可以是半成品；用 `--drafts` 预览时它必须是完整文章。
+- `license` / `license_url`：覆盖站点默认许可，只影响本篇文章底部那一行。
+
+front matter 里写错类型不会中断构建：`author` 不是字符串就当没写，`tags` 里非字符串
+的条目被丢弃，`updated` 写不出合法日期就当没写。除上述字段外，任何自定义键都会
+原样留在模板的 `post.meta` 里，用不用由模板和作者决定。
 
 新建文章：
 
@@ -139,7 +146,7 @@ byggleaf new content
 ```
 
 会从包内 `resources/article.example.md` 创建 `content/posts/new-article.md`，自动写入当前
-日期时间、标题 `New Article`，并预留 `updated`、`author`、`tags` 字段。
+日期时间、标题 `New Article`，并预留 `updated`、`author`、`tags`、`draft` 字段。
 如果文件已存在，会继续创建 `new-article-2.md`，不会覆盖已有文章。
 
 按 `date` 倒序生成：
@@ -221,8 +228,25 @@ public/404.html
 除 `posts/` 外，任何包含 `index.md` 的文件夹都会生成
 `/<文件夹路径>/index.html`。页面标题取正文开头的 H1；没有 H1 时使用文件夹名。
 
+页面同样接受 front matter：`title` 覆盖正文 H1，`draft = true` 让页面不发布，
+其余键留在模板的 `page.meta` 里。
+
 这些页面**不会**自动进入导航栏。导航栏只有 Home / About 两个链接。
 例如 `content/statement/index.md` 会生成 `/statement/`，但它是隐藏页面。
+
+### 文章底部
+
+每篇文章正文结束之后，自上而下两段，各用一条 1px 细线分隔，没有卡片、
+没有背景色：
+
+1. **上一篇 / 下一篇**：只有标签和箭头，左右分布，不带文章标题。
+   全站按 `date` 倒序串联，跨分页也连续；没有相邻文章就不渲染这一行。
+2. **许可**：`license` 原样显示，前面加一个本地化前缀（中文「本文采用」，
+   英文「Licensed under」）；有 `license_url` 时套成链接，并在 `<head>`
+   同时输出 `<link rel="license">`。`license = "CC0 1.0"` 也可以不带链接。
+
+两段都只在有内容时出现：没有相邻文章就没有导航，没有许可就不显示许可。
+打印时导航会被隐藏。
 
 ### 站点图标
 
@@ -239,6 +263,8 @@ baseurl = "https://example.com"
 copyright = "Your Name"
 language = "zh-CN"
 posts_per_page = 5
+license = "CC BY-NC-SA 4.0"
+license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"
 
 [[projects]]
 name = "Example"
@@ -247,9 +273,14 @@ description = "Example."
 ```
 
 `title` 和 `baseurl` 必填（`baseurl` 可以是空字符串）。`projects` 会渲染在首页
-项目列表。`posts_per_page` 是正整数，默认 `5`，决定首页每页显示多少篇文章。
-`language` 必须是规范的 BCP 47 语言标签，并且必须存在同名语言文件；当前内置
-`en`、`ja`、`ko`、`yue`、`zh`、`zh-CN`、`zh-HK`。它同时决定 `<html lang>` 和界面文案。
+项目列表，`url` 可留空。`posts_per_page` 是正整数，默认 `5`，决定首页每页显示
+多少篇文章。`baseurl` 与 `url` 按原样采用，值本身由作者负责。
+`license` 与 `license_url` 是文章底部的许可文字与链接，留空则整块不显示，
+文章 front matter 可逐篇覆盖。文字原样显示，前面只加一个来自界面语言的
+「本文采用 / Licensed under」前缀。
+`language` 必须是规范的 BCP 47 语言标签；当前内置 `en`、`ja`、`ko`、`yue`、`zh`、
+`zh-CN`、`zh-HK`。没有对应翻译文件时回退英语，并在构建摘要里给一行说明，不中断
+构建。它同时决定 `<html lang>` 和界面文案。
 没有 `[theme]`、`[extra_css]` 或其他逃生舱。
 
 ## 架构
@@ -309,7 +340,7 @@ templates/
 ├── base.html      # 页面骨架 + head + 导航 + footer
 ├── 404.html       # 本地化「页面未找到」
 ├── home.html      # 首页（文章流 + 分页）
-├── post.html      # 文章详情
+├── post.html      # 文章详情 + 上下篇 / 许可
 ├── page.html      # about/statement 等独立页面
 └── postlist.html  # 首页的文章流
 ```
@@ -342,14 +373,15 @@ locales/
 - 语言小写、地区大写。
   `zh-hk` → `zh-HK`。
 - 标签规范化后写入 `<html lang>`，供浏览器和搜索引擎识别。
-- **没有回退机制**：`load_locale()` 只查找与规范化标签完全同名的文件。
+- **只按文件名精确匹配**：`load_locale()` 查找与规范化标签完全同名的文件；
+  找不到时回退 `en`，构建继续，但在摘要里打印一行 `note:`。
 - 不符合 BCP 47 形状的写法，例如 `zh_CN`、`chinese`、`zh-CN-`，
   在配置解析阶段就会报错。
-- 缺少对应文件时列出全部已有语言文件，并提示贡献翻译：
+- 缺少对应文件时的提示长这样，同时会列出现有语言并回退英语：
 
 ```text
-no translation file for 'zh-SG'; available: en, ja, ko, yue, zh, zh-CN, zh-HK.
-Add locales/zh-SG.toml or contribute a translation.
+note: no translation file for 'zh-SG'; available: en, ja, ko, yue, zh, zh-CN, zh-HK.
+Add locales/zh-SG.toml or contribute a translation. Falling back to 'en'.
 ```
 
 - **缺少某个 `[ui]` key，或该 key 的值为空时，页面直接显示 key 名。**
@@ -384,13 +416,13 @@ Add locales/zh-SG.toml or contribute a translation.
 生成页面会包含：
 
 ```html
-<meta name="generator" content="ByggLeaf v0.1.2">
+<meta name="generator" content="ByggLeaf v0.1.3">
 ```
 
 以及 footer：
 
 ```html
-<p class="colophon">Built with ByggLeaf v0.1.2. No JavaScript or tracking added by ByggLeaf.</p>
+<p class="colophon">Built with ByggLeaf v0.1.3. No JavaScript or tracking added by ByggLeaf.</p>
 ```
 
 版本号直接来自当前的 `pyproject.toml`，不维护第二份字面量。
@@ -470,7 +502,7 @@ CI 在 Python 3.11 与 3.13 上运行同一套门禁，见
 - 版本来自 `pyproject.toml`，并渲染到 generator meta 与页脚
 - 模板保持扁平，文件名短而直接；多词命名使用下划线
 - 语言文件名本身必须是规范化 BCP 47 标签
-- 严格按 BCP 47 规范化标签查找同名文件，不做地区或语言回退
+- 语言文件按规范化标签精确匹配；缺失时构建回退 `en` 并在摘要里记录一行 note
 - 首页分页由 `[site].posts_per_page` 控制，不再生成 `/posts/` 归档页
 - 详情页 `All posts` 返回文章所属分页
 - `new content` 从包内模板生成文章并自动写入日期时间
@@ -488,13 +520,25 @@ CI 在 Python 3.11 与 3.13 上运行同一套门禁，见
 下面这份工作流是给**你的站点仓库**用的，不放在 ByggLeaf 源码仓库里。把它保存为
 站点仓库的 `.github/workflows/pages.yml`。
 
-在站点仓库的 GitHub 设置中启用：
-
-```text
-Settings -> Pages -> Build and deployment -> Source: GitHub Actions
-```
+它的规矩只有一条：**域名由 `byggleaf.toml` 的 `[site].baseurl` 决定**。
+工作流不推导、不改写 baseurl，只在发布前核对它和 Pages 实际提供的站点是否一致；
+不一致就直接失败，而不是静默发出一个链接全错的站。
 
 ```yaml
+# 部署到 GitHub Pages。
+#
+# 域名由站点配置说了算：本工作流不推导、不改写 baseurl，只读 byggleaf.toml
+# 里的 [site].baseurl，并在发布前核对它是否就是 Pages 实际提供的站点。
+# 对不上就直接失败——因为自定义域名属于仓库设置（Settings → Pages），
+# 工作流改不了它，只能替你把错误提前暴露，而不是静默发出一个坏站。
+#
+# 首次部署前：
+#   1. 把 [site].baseurl 填成站点真实地址
+#      自定义域名：https://garden.example.com
+#      项目站：    https://<user>.github.io/<repo>
+#   2. 用自定义域名时，在 Settings → Pages → Custom domain 填同一个域名
+#   3. 在 DNS 提供商处配好 A/ALIAS/CNAME 记录
+
 name: pages
 
 on:
@@ -523,42 +567,69 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+          cache: pip
 
       - name: Install ByggLeaf
         run: python -m pip install byggleaf
 
-      - name: Build with Pages baseurl
+      - name: Read baseurl from byggleaf.toml
+        id: site
         run: |
           set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import pathlib
+          import tomllib
+          from urllib.parse import urlsplit
 
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          if [ "$REPO_NAME" = "${GITHUB_REPOSITORY_OWNER}.github.io" ]; then
-            BASEURL="https://${GITHUB_REPOSITORY_OWNER}.github.io"
-          else
-            BASEURL="https://${GITHUB_REPOSITORY_OWNER}.github.io/${REPO_NAME}"
-          fi
-
-          python - "$BASEURL" <<'PY'
-          import re
-          import sys
-          from pathlib import Path
-
-          path = Path("byggleaf.toml")
-          text = path.read_text(encoding="utf-8")
-          text, count = re.subn(
-              r'(?m)^baseurl\s*=\s*.*$',
-              f'baseurl = "{sys.argv[1]}"',
-              text,
-              count=1,
-          )
-          if count != 1:
-              raise SystemExit("byggleaf.toml: baseurl not found")
-          path.write_text(text, encoding="utf-8")
+          path = pathlib.Path("byggleaf.toml")
+          site = tomllib.loads(path.read_text(encoding="utf-8"))["site"]
+          baseurl = str(site.get("baseurl", "")).rstrip("/")
+          if not baseurl:
+              raise SystemExit(
+                  f"{path}: [site].baseurl is empty. "
+                  "Empty is for local preview only; a deployed site needs its real address."
+              )
+          parts = urlsplit(baseurl)
+          if not parts.scheme or not parts.hostname:
+              raise SystemExit(f"{path}: [site].baseurl is not a full URL: {baseurl!r}")
+          print(f"baseurl={baseurl}")
+          print(f"host={parts.hostname}")
+          print(f"path={parts.path.rstrip('/')}")
           PY
 
-          byggleaf build
+      - name: Build
+        run: byggleaf build
 
       - uses: actions/configure-pages@v5
+        id: pages
+
+      - name: Check baseurl against the Pages site
+        env:
+          BASEURL_HOST: ${{ steps.site.outputs.host }}
+          BASEURL_PATH: ${{ steps.site.outputs.path }}
+          PAGES_HOST: ${{ steps.pages.outputs.host }}
+          PAGES_PATH: ${{ steps.pages.outputs.base_path }}
+        run: |
+          python - <<'PY'
+          import os
+          import sys
+
+          ours = (os.environ["BASEURL_HOST"], os.environ["BASEURL_PATH"].rstrip("/"))
+          pages = (os.environ["PAGES_HOST"], os.environ["PAGES_PATH"].rstrip("/"))
+          if ours == pages:
+              print(f"baseurl matches Pages: {ours[0]}{ours[1]}")
+              sys.exit(0)
+
+          print(
+              f"::error::[site].baseurl points at {ours[0]}{ours[1]}, "
+              f"but this repository is served at {pages[0]}{pages[1]}."
+          )
+          print(
+              "Bind the custom domain under Settings -> Pages -> Custom domain "
+              "and point DNS at GitHub, or set baseurl to the Pages address above."
+          )
+          sys.exit(1)
+          PY
 
       - uses: actions/upload-pages-artifact@v3
         with:
@@ -568,19 +639,20 @@ jobs:
         uses: actions/deploy-pages@v4
 ```
 
-工作流会自动把 `baseurl` 设为项目页地址：
+首次部署：
 
-```text
-https://<owner>.github.io/<repo>
-```
+1. 把 `[site].baseurl` 填成站点真实地址。项目站是
+   `https://<owner>.github.io/<repo>`，仓库名为 `<owner>.github.io` 时则是
+   `https://<owner>.github.io`。
+2. 用自定义域名时，在 `Settings -> Pages -> Custom domain` 填同一个域名。
+   这一步必须手动：GitHub 的自定义域名属于仓库设置，工作流改不了；
+   用自定义 Actions 工作流发布时，产物里的 `CNAME` 文件会被忽略。
+3. 在 DNS 提供商处配置记录：apex 域名用 `A`/`ALIAS`，子域用 `CNAME` 指向
+   `<owner>.github.io`。
+4. 不要忘记 `Settings -> Pages -> Build and deployment -> Source: GitHub Actions`。
 
-如果仓库名是 `<owner>.github.io`，则自动使用：
-
-```text
-https://<owner>.github.io
-```
-
-使用自定义域名时，把脚本中的 `BASEURL` 改成你的域名即可。
+`baseurl` 留空只适合本地预览。线上部署留空会让工作流直接失败，因为根相对链接
+在 Pages 的子路径下会全部指错。
 
 ## 发布流程
 
@@ -591,7 +663,7 @@ https://<owner>.github.io
 2. 手动创建并推送 tag：
 
 ```bash
-git tag -a v0.1.2 -m "ByggLeaf v0.1.2"
+git tag -a v0.1.2 -m "ByggLeaf v0.1.3"
 git push origin v0.1.2
 ```
 

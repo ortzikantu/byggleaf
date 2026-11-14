@@ -8,7 +8,13 @@ copyright = "Your Name"
 language = "zh-CN"
 posts_per_page = 5
 
+# 文章底部的许可文字：原样显示，有 license_url 就套成链接（同时写进 <head>）。
+# 文章 front matter 里的 license / license_url 会覆盖这里。留空则整块不显示。
+# license = "CC BY-NC-SA 4.0"
+# license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"
+
 [[projects]]
 name = "Example"
 url = "https://github.com/example/example"
 description = "Example."
+

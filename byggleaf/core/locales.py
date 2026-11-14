@@ -116,7 +116,7 @@ def _read_locale(path: Path) -> dict[str, str]:
 
     strings: dict[str, str] = {}
     for key, value in ui.items():
-        if not isinstance(key, str) or not isinstance(value, str):
+        if not isinstance(value, str):
             raise LocaleError(f"{path}: ui.{key} must be a string")
         strings[key] = value
     return strings

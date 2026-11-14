@@ -39,6 +39,7 @@ class NewArticleTests(unittest.TestCase):
         self.assertIn('updated = ""', text)
         self.assertIn('author = ""', text)
         self.assertIn("tags = []", text)
+        self.assertIn("draft = false", text)
 
         post = parse_post(result.path)
         self.assertEqual(post.title, "New Article")

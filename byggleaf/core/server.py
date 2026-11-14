@@ -32,12 +32,14 @@ class _PreviewHandler(SimpleHTTPRequestHandler):
     让预览行为和正式静态托管一致。
     """
 
+    _serving_custom_404 = False
+
     def end_headers(self) -> None:
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def send_response(self, code: int, message: str | None = None) -> None:
-        if getattr(self, "_serving_custom_404", False):
+        if self._serving_custom_404:
             code = 404
         super().send_response(code, message)
 

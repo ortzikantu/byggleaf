@@ -194,18 +194,6 @@ a:hover {
   text-transform: uppercase;
 }
 
-.section-link {
-  flex: none;
-  color: var(--color-forest-ink);
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-decoration: none;
-}
-
-.section-link:hover {
-  color: var(--color-terracotta);
-}
-
 /* --------------------------------------------------------------------------
    文章流
    -------------------------------------------------------------------------- */
@@ -557,18 +545,51 @@ a:hover {
   font-weight: 700;
 }
 
+/* 文章底部：上下篇与许可，各用一条细线分隔，不加卡片。 */
 .post-footer-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
   margin-block-start: 3rem;
   padding-block-start: 1.2rem;
   border-top: 1px solid var(--rule);
-  font-size: 0.86rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
 }
 
 .post-footer-nav a {
+  color: var(--color-forest-ink);
   text-decoration: none;
 }
 
-.post-footer-nav a:hover {
+/* 只有「下一篇」时（首篇）也要贴右，只有「上一篇」时（末篇）保持贴左。 */
+.post-footer-nav a[rel="next"] {
+  margin-inline-start: auto;
+}
+
+.post-footer-nav a:hover,
+.post-footer-nav a:focus-visible {
+  color: var(--color-terracotta);
+}
+
+.post-license {
+  margin: 1.5rem 0 0;
+  padding-block-start: 1.1rem;
+  border-top: 1px solid var(--rule);
+  color: var(--muted-ink);
+  font-size: 0.76rem;
+  letter-spacing: 0.045em;
+}
+
+.post-license a {
+  color: inherit;
+  border-bottom: 1px solid var(--rule);
+  text-decoration: none;
+}
+
+.post-license a:hover,
+.post-license a:focus-visible {
+  border-color: currentColor;
   color: var(--color-terracotta);
 }
 
@@ -634,6 +655,7 @@ a:hover {
   .post-list-item {
     padding-block: 1.55rem;
   }
+
 }
 
 @media print {

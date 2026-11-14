@@ -1,8 +1,6 @@
 {# 首页（/）：文章流在这里分页，不生成归档页。 #}
 {% extends "base.html" %}
 
-{% block title %}{% if pagination.current_page > 1 %}{{ ui('page_title', page=pagination.current_page) }} · {% endif %}{{ site.title }}{% endblock %}
-
 {% block content %}
 {% if pagination.current_page == 1 %}
 <section class="hero" aria-labelledby="hero-title">

@@ -77,10 +77,7 @@ def render_rss(
     channel_link = site.url("/")
     self_link = site.url("/rss.xml")
     description = site.hero_subtitle or site.title
-    generated_at = build_time or dt.datetime.now(dt.UTC)
-    if generated_at.tzinfo is None:
-        generated_at = generated_at.replace(tzinfo=dt.UTC)
-    generated_at = generated_at.astimezone(dt.UTC)
+    generated_at = _rss_datetime(build_time or dt.datetime.now(dt.UTC))
 
     lines = [
         '<?xml version="1.0" encoding="UTF-8"?>',
@@ -93,7 +90,7 @@ def render_rss(
         f"    <description>{_xml_escape(description)}</description>",
         f"    <language>{_xml_escape(site.language)}</language>",
         f"    <generator>ByggLeaf {VERSION}</generator>",
-        f"    <lastBuildDate>{format_datetime(generated_at, usegmt=True)}</lastBuildDate>",
+        f"    <lastBuildDate>{_rfc822(generated_at)}</lastBuildDate>",
         f"    <atom:link href={quoteattr(self_link)} rel=\"self\" "
         'type="application/rss+xml"/>',
     ]

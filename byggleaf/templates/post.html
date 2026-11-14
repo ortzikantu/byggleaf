@@ -1,22 +1,14 @@
 {# 文章详情页（/posts/<slug>/）。 #}
 {% extends "base.html" %}
 
-{% block title %}{{ post.title }} · {{ site.title }}{% endblock %}
-
 {% block meta %}
-<meta name="description" content="{{ post.summary or post.title }}">
+{{ super() }}
 {% if post.author %}
 <meta name="author" content="{{ post.author }}">
 {% endif %}
 {% if post.tags %}
 <meta name="keywords" content="{{ post.tags|join(', ') }}">
 {% endif %}
-<link rel="canonical" href="{{ url(post.url) }}">
-<meta property="og:type" content="article">
-<meta property="og:site_name" content="{{ site.title }}">
-<meta property="og:title" content="{{ post.title }}">
-<meta property="og:description" content="{{ post.summary or post.title }}">
-<meta property="og:url" content="{{ url(post.url) }}">
 <meta property="article:published_time" content="{{ post.date.isoformat() }}">
 {% if post.updated %}
 <meta property="article:modified_time" content="{{ post.updated.isoformat() }}">
@@ -27,6 +19,9 @@
 {% for tag in post.tags %}
 <meta property="article:tag" content="{{ tag }}">
 {% endfor %}
+{% if license_url %}
+<link rel="license" href="{{ license_url }}">
+{% endif %}
 {% endblock %}
 
 {% block content %}
@@ -50,7 +45,19 @@
   </div>
 </article>
 
+{% if previous_post or next_post %}
 <nav class="post-footer-nav" aria-label="{{ ui('post_navigation') }}">
-  <a href="{{ url(back_url) }}">← {{ ui('all_posts') }}</a>
+  {% if previous_post %}
+  <a href="{{ url(previous_post.url) }}" rel="prev">← {{ ui('previous_post') }}</a>
+  {% endif %}
+  {% if next_post %}
+  <a href="{{ url(next_post.url) }}" rel="next">{{ ui('next_post') }} →</a>
+  {% endif %}
 </nav>
+{% endif %}
+
+{# 许可：作者写什么就显示什么，前缀来自界面语言。 #}
+{% if license_text %}
+<p class="post-license">{{ ui('licensed_under') }} {% if license_url %}<a href="{{ license_url }}" rel="license">{{ license_text }}</a>{% else %}{{ license_text }}{% endif %}</p>
+{% endif %}
 {% endblock %}

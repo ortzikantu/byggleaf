@@ -4,5 +4,6 @@ date = {{date}}
 updated = ""
 author = ""
 tags = []
+draft = false
 +++
 

@@ -297,30 +297,23 @@ class FrontMatterErrorTests(unittest.TestCase):
         )
         self.assertEqual(post.title, "YAML Post")
 
-    def test_yaml_front_matter_line_without_colon_is_rejected(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "key: value"):
-            parse_post(self.write('---\ntitle: "X"\nbroken\n---\n\nBody.\n'))
+    def test_yaml_front_matter_lines_are_taken_as_written(self) -> None:
+        """``---`` 块只做机械切分，格式错了也不拦构建。"""
 
-    def test_yaml_front_matter_empty_key_is_rejected(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "empty front matter key"):
-            parse_post(self.write("---\n: value\n---\n\nBody.\n"))
-
-    def test_yaml_front_matter_unterminated_quote_is_rejected(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "unterminated quoted value"):
-            parse_post(
-                self.write(
-                    '---\ntitle: "unterminated\ndate: 2024-01-01\n---\n\nBody.\n'
-                )
+        post = parse_post(
+            self.write(
+                '---\ntitle: "X"\ndate: 2024-01-01\nbroken\n: value\n'
+                'quote: "unterminated\ncalc: "a" + "b"\n---\n\nBody.\n'
             )
-
-    def test_yaml_front_matter_invalid_literal_is_rejected(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "invalid quoted value"):
-            parse_post(
-                self.write('---\ntitle: "a" + "b"\ndate: 2024-01-01\n---\n\nBody.\n')
-            )
+        )
+        self.assertEqual(post.title, "X")
+        self.assertEqual(post.meta["broken"], "")
+        self.assertEqual(post.meta[""], "value")
+        self.assertEqual(post.meta["quote"], '"unterminated')
+        self.assertEqual(post.meta["calc"], '"a" + "b"')
 
     def test_empty_date_is_rejected(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "must not be empty"):
+        with self.assertRaisesRegex(MarkdownError, "invalid date"):
             parse_post(self.write('+++\ntitle = "X"\ndate = ""\n+++\n\nBody.\n'))
 
     def test_quoted_datetime_string_is_parsed(self) -> None:
@@ -335,29 +328,54 @@ class FrontMatterErrorTests(unittest.TestCase):
         with self.assertRaisesRegex(MarkdownError, "date or date-time"):
             parse_post(self.write('+++\ntitle = "X"\ndate = 123\n+++\n\nBody.\n'))
 
-    def test_author_must_be_a_string(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "author must be a string"):
-            parse_post(
-                self.write(
-                    '+++\ntitle = "X"\ndate = 2024-01-01\nauthor = 5\n+++\n\nBody.\n'
-                )
-            )
+    def test_non_string_author_is_ignored(self) -> None:
+        post = parse_post(
+            self.write('+++\ntitle = "X"\ndate = 2024-01-01\nauthor = 5\n+++\n\nBody.\n')
+        )
+        self.assertEqual(post.author, "")
 
-    def test_tags_list_entries_must_be_strings(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "list of strings"):
-            parse_post(
-                self.write(
-                    '+++\ntitle = "X"\ndate = 2024-01-01\ntags = [1]\n+++\n\nBody.\n'
-                )
+    def test_non_string_tags_entries_are_dropped(self) -> None:
+        post = parse_post(
+            self.write(
+                '+++\ntitle = "X"\ndate = 2024-01-01\ntags = ["a", 1, "b"]\n+++\n\nBody.\n'
             )
+        )
+        self.assertEqual(post.tags, ("a", "b"))
 
-    def test_tags_must_be_a_list_or_string(self) -> None:
-        with self.assertRaisesRegex(MarkdownError, "list or comma-separated"):
-            parse_post(
-                self.write(
-                    '+++\ntitle = "X"\ndate = 2024-01-01\ntags = 5\n+++\n\nBody.\n'
-                )
+    def test_non_list_tags_become_empty(self) -> None:
+        post = parse_post(
+            self.write('+++\ntitle = "X"\ndate = 2024-01-01\ntags = 5\n+++\n\nBody.\n')
+        )
+        self.assertEqual(post.tags, ())
+
+    def test_unparseable_updated_is_ignored(self) -> None:
+        post = parse_post(
+            self.write(
+                '+++\ntitle = "X"\ndate = 2024-01-01\nupdated = "someday"\n+++\n\nBody.\n'
             )
+        )
+        self.assertIsNone(post.updated)
+
+    def test_draft_is_read_from_toml(self) -> None:
+        post = parse_post(
+            self.write('+++\ntitle = "X"\ndate = 2024-01-01\ndraft = true\n+++\n\nBody.\n')
+        )
+        self.assertTrue(post.draft)
+
+    def test_draft_string_false_is_not_a_draft(self) -> None:
+        post = parse_post(
+            self.write('---\ntitle: "X"\ndate: 2024-01-01\ndraft: false\n---\n\nBody.\n')
+        )
+        self.assertFalse(post.draft)
+
+    def test_unknown_keys_stay_available_in_meta(self) -> None:
+        post = parse_post(
+            self.write(
+                '+++\ntitle = "X"\ndate = 2024-01-01\ncover = "leaf.png"\n+++\n\nBody.\n'
+            )
+        )
+        self.assertEqual(post.meta["cover"], "leaf.png")
+        self.assertEqual(post.meta["title"], "X")
 
     def test_timezone_aware_dates_sort_in_utc(self) -> None:
         post = parse_post(

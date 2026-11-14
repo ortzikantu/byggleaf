@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from . import cli
 from .core.version import VERSION
@@ -107,9 +108,6 @@ def _cmd_new(options: cli.NewOptions) -> int:
 def _cmd_build(options: cli.BuildOptions) -> int:
     from .core.builder import Builder, BuildError
     from .core.config import CONFIG_FILENAME, ConfigError, load_config
-    from .core.jinja import TemplateError
-    from .core.locales import LocaleError
-    from .core.markdown import MarkdownError
 
     console = cli.Console()
     errors = cli.Console(stream=sys.stderr)
@@ -122,15 +120,12 @@ def _cmd_build(options: cli.BuildOptions) -> int:
         config = load_config(root / CONFIG_FILENAME)
         console.item("site", config.site.title)
         console.item("baseurl", config.site.baseurl or "(root-relative)")
-        result = Builder(root, config).build()
-    except (
-        ConfigError,
-        BuildError,
-        LocaleError,
-        MarkdownError,
-        TemplateError,
-        OSError,
-    ) as exc:
+        if options.drafts:
+            console.item("drafts", "included")
+        result = Builder(
+            root, config, include_drafts=options.drafts
+        ).build()
+    except (ConfigError, BuildError, OSError) as exc:
         errors.error(str(exc))
         if public_dir.exists() or public_dir.is_symlink():
             errors.muted(
@@ -147,6 +142,8 @@ def _cmd_build(options: cli.BuildOptions) -> int:
     console.item("assets", str(result.assets))
     if result.favicon:
         console.item("favicon", result.favicon)
+    for note in result.notes:
+        console.muted(f"note: {note}")
     console.success(f"Built in {result.duration_seconds * 1000:.0f} ms.")
     return 0
 
@@ -183,16 +180,14 @@ def _cmd_serve(options: cli.ServeOptions) -> int:
                 "from another device."
             )
         if configured_baseurl:
-            local_prefixes = (
-                f"http://127.0.0.1:{options.port}",
-                f"http://localhost:{options.port}",
-                f"http://{options.host}:{options.port}",
-            )
-            if not any(
-                configured_baseurl == prefix
-                or configured_baseurl.startswith(prefix + "/")
-                for prefix in local_prefixes
-            ):
+            local_netlocs = {
+                f"127.0.0.1:{options.port}",
+                f"localhost:{options.port}",
+                f"{options.host}:{options.port}",
+            }
+            if ":" in options.host and not options.host.startswith("["):
+                local_netlocs.add(f"[{options.host}]:{options.port}")
+            if urlsplit(configured_baseurl).netloc not in local_netlocs:
                 console.muted(
                     f"note: pages use baseurl {configured_baseurl!r}; "
                     'set [site] baseurl = "" for a purely local preview.'
@@ -206,10 +201,7 @@ def _cmd_serve(options: cli.ServeOptions) -> int:
             port=options.port,
             on_ready=ready,
         )
-    except ServerError as exc:
-        errors.error(str(exc))
-        return 1
-    except OSError as exc:
+    except (ServerError, OSError) as exc:
         errors.error(str(exc))
         return 1
     return 0

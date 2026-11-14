@@ -99,10 +99,8 @@ CONTENT_DIRECTORIES: tuple[Path, ...] = (
 class ScaffoldResult:
     """记录 init 实际做了什么，供终端摘要如实输出。"""
 
-    root: Path
     created: tuple[Path, ...]
     skipped: tuple[Path, ...]
-    favicon_copied: bool
 
 
 def _write_file(path: Path, content: str, *, force: bool) -> bool:
@@ -165,7 +163,6 @@ def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
 
     # 包内 favicon 让每个新花园都有可辨识的标签页图标；只复制一次到用户
     # 资源目录，之后由用户替换或删除。删除后构建器只是不再输出 icon 链接。
-    favicon_copied = False
     favicon_target = root / "assets" / "img" / "favicon.ico"
     if DEFAULT_FAVICON.is_file() and (force or not favicon_target.exists()):
         try:
@@ -174,13 +171,10 @@ def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
         except OSError as exc:
             raise ScaffoldError(f"cannot copy default favicon: {exc}") from exc
         created.append(favicon_target)
-        favicon_copied = True
     elif favicon_target.exists():
         skipped.append(favicon_target)
 
     return ScaffoldResult(
-        root=root,
         created=tuple(created),
         skipped=tuple(skipped),
-        favicon_copied=favicon_copied,
     )

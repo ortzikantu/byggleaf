@@ -2,12 +2,37 @@
 
 本文件记录 ByggLeaf 的重要变更。版本号的唯一来源是 `pyproject.toml`。
 
-## 未发布
+## 0.1.3
+
+### 新增
+
+- 文章底部新增两段：上一篇/下一篇（只有标签与箭头，左右分布，取代原来的
+  「全部文章」按钮）与许可声明。
+- `[site].license` / `license_url` 与文章 front matter 同名键：许可文字原样显示，
+  前面只加一个本地化前缀；有链接时同时输出 `<head rel="license">`；都没写则
+  整块不显示。
+- 文章 front matter 支持 `draft = true`：草稿默认不进入首页、RSS 与 sitemap，
+  `byggleaf build --drafts` 时才构建。默认构建不会碰草稿，所以草稿可以先只写半分；
+  用 `--drafts` 预览时草稿必须是完整文章（要有 title 与 date）。
+- 独立页面（`content/<目录>/index.md`）也接受 front matter：`title` 覆盖正文 H1，
+  `draft` 让页面不发布。
 
 ### 变更
 
+- front matter 不再做类型审判：`author` 不是字符串就当没写，`tags` 里非字符串的条目
+  被丢弃，`updated` 解析失败就当没写。未知键原样保留在 `post.meta` / `page.meta`
+  中，是否使用由模板决定。
+- 移除配置层的 URL scheme 审查：`[site].baseurl` 与 `[[projects]].url` 按原样采用，
+  不再因为 `javascript:` 之类的值中断构建；站点配置和 Markdown 内容一样由作者负责。
+- `baseurl` 含空白字符不再报错；`[[projects]].url` 变为可选。
+- `---` front matter 只做机械切分：缺少冒号、空键、引号未闭合或引号内不是合法
+  字面量，都原样保留为字符串，不再抛错。
+- 没有 `content/` 目录不再报错：项目会构建出一个只有首页骨架的空花园。
+- `[site].language` 没有对应翻译文件时回退英语并在构建摘要里说明，不再中断构建。
 - `404.html` 不再输出 description、canonical 与 Open Graph 元数据：错误页不应被
   索引或分享，保留 `<title>`、`lang`、导航与页脚即可。
+- 文章页的 `og:title` 现在与 `<title>` 及其他页面一致，带上 ` · 站点标题` 后缀；
+  标题与 SEO 元数据统一由构建器计算，模板不再各自拼接。
 
 ## 0.1.2
 
