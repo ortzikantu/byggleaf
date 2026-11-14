@@ -83,6 +83,9 @@ byggleaf build
 byggleaf serve
 ```
 
+`byggleaf build` 的摘要里会打印 `version`，方便确认这次构建用的是哪一版，
+尤其在你同时装过多个 ByggLeaf 或刚改过版本号的时候。
+
 打开 <http://127.0.0.1:6789/> 即可查看首页文章流和翻页效果。
 
 ## 工作区

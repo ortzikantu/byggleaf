@@ -15,6 +15,7 @@ from unittest import mock
 from byggleaf import app
 from byggleaf.core.clean import CleanError
 from byggleaf.core.server import ServerError
+from byggleaf.core.version import VERSION
 
 
 class AppTests(unittest.TestCase):
@@ -48,6 +49,14 @@ class AppTests(unittest.TestCase):
         self.assertEqual(code, 0, error)
         self.assertIn("note:", output)
         self.assertIn("Falling back to 'en'", output)
+
+    def test_build_reports_the_version(self) -> None:
+        self.assertEqual(self.run_app("init")[0], 0)
+        code, output, error = self.run_app("build")
+        self.assertEqual(code, 0, error)
+        self.assertIn("ByggLeaf", output)
+        self.assertIn(VERSION, output)
+        self.assertIn("  version", output)
 
     def test_build_with_drafts_flag_reports_them(self) -> None:
         self.assertEqual(self.run_app("init")[0], 0)

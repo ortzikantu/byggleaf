@@ -115,6 +115,8 @@ def _cmd_build(options: cli.BuildOptions) -> int:
     public_dir = root / "public"
 
     console.heading("build")
+    # 版本先行：换过安装或改过版本号，一眼就能看出构建用的是哪一版。
+    console.item("version", VERSION)
 
     try:
         config = load_config(root / CONFIG_FILENAME)
