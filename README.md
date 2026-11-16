@@ -426,13 +426,13 @@ Add locales/zh-SG.toml or contribute a translation. Falling back to 'en'.
 生成页面会包含：
 
 ```html
-<meta name="generator" content="ByggLeaf v0.1.3">
+<meta name="generator" content="ByggLeaf v0.1.4">
 ```
 
 以及 footer：
 
 ```html
-<p class="colophon">Built with ByggLeaf v0.1.3. No JavaScript or tracking added by ByggLeaf.</p>
+<p class="colophon">Built with ByggLeaf v0.1.4. No JavaScript or tracking added by ByggLeaf.</p>
 ```
 
 版本号直接来自当前的 `pyproject.toml`，不维护第二份字面量。
@@ -673,9 +673,12 @@ jobs:
 2. 手动创建并推送 tag：
 
 ```bash
-git tag -a v0.1.2 -m "ByggLeaf v0.1.3"
-git push origin v0.1.2
+git tag -s v0.1.4 -m "ByggLeaf v0.1.4"
+git push origin v0.1.4
+git push gh v0.1.4
 ```
+
+tag 必须用 `-s` 签名；`trunk` 与 tag 都要两边各推一次，GitHub 上的工作流才会发布。
 
 3. tag push 自动触发 [`.github/workflows/publish.yml`](.github/workflows/publish.yml)：
    - `verify`：校验 tag 与版本、Ruff、mypy、测试与覆盖率、构建、`twine check`、
