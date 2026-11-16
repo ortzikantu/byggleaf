@@ -36,6 +36,7 @@ class ScaffoldTests(unittest.TestCase):
         result = scaffold.init_site(self.root)
         for relative in (
             "byggleaf.toml",
+            ".gitignore",
             "content/posts/hello-world.md",
             "content/about/index.md",
             "content/statement/index.md",
@@ -48,7 +49,13 @@ class ScaffoldTests(unittest.TestCase):
                 self.assertTrue((self.root / relative).exists())
         self.assertGreater((self.root / "assets/img/favicon.ico").stat().st_size, 0)
         self.assertIn(self.root / "assets/img/favicon.ico", result.created)
-        self.assertEqual(len(result.created), 5)
+        self.assertEqual(len(result.created), 6)
+
+    def test_init_writes_a_gitignore_for_build_artifacts(self) -> None:
+        scaffold.init_site(self.root)
+        text = (self.root / ".gitignore").read_text(encoding="utf-8")
+        for ignored in ("public/", ".venv/", "build/", "__pycache__/"):
+            self.assertIn(ignored, text)
 
     def test_second_init_refuses_to_clobber_without_force(self) -> None:
         scaffold.init_site(self.root)
@@ -143,7 +150,7 @@ class BuildTests(unittest.TestCase):
         return {
             rel: href
             for href, rel in re.findall(
-                r'<a href="([^"]+)" rel="(prev|next)"',
+                r'<a [^>]*href="([^"]+)" rel="(prev|next)"',
                 post,
             )
         }
@@ -233,6 +240,29 @@ class BuildTests(unittest.TestCase):
     def test_no_license_renders_nothing(self) -> None:
         self.build()
         self.assertNotIn("post-license", self.read("posts/hello-world/index.html"))
+
+    def test_newer_link_sits_left_and_older_sits_right(self) -> None:
+        self.write_post("older.md", "Older", "2024-01-01")
+        self.write_post("newer.md", "Newer", "2026-01-01")
+        self.build()
+
+        newest = self.read("posts/newer/index.html")
+        self.assertIn('class="post-nav-older"', newest)
+        self.assertIn('rel="prev"', newest)
+        self.assertIn("Older →", newest)
+        self.assertNotIn("post-nav-newer", newest)
+
+        oldest = self.read("posts/older/index.html")
+        self.assertIn('class="post-nav-newer"', oldest)
+        self.assertIn('rel="next"', oldest)
+        self.assertIn("← Newer", oldest)
+        self.assertNotIn("post-nav-older", oldest)
+
+        # 两边都有时，新的在左、旧的在右。
+        middle = self.read("posts/hello-world/index.html")
+        self.assertLess(
+            middle.index("post-nav-newer"), middle.index("post-nav-older")
+        )
 
     def test_drafts_are_skipped_by_default(self) -> None:
         self.write_draft("secret.md")
@@ -406,7 +436,7 @@ class BuildTests(unittest.TestCase):
         self.assertNotIn('rel="next"', third)
 
         april = self.read("posts/april/index.html")
-        self.assertIn("← Previous post</a>", april)
+        self.assertIn("Older →</a>", april)
         self.assertNotIn("post-nav-title", april)
         self.assertEqual(
             self.nav_links("april"), {"prev": "https://example.com/posts/march/"}
@@ -531,7 +561,7 @@ class BuildTests(unittest.TestCase):
         self.assertIn(f"由 ByggLeaf {VERSION} 生成", home)
 
         post = self.read("posts/hello-world/index.html")
-        self.assertIn("下一篇", post)
+        self.assertIn("较新", post)
         self.assertIn('aria-label="文章导航"', post)
 
     def test_traditional_chinese_language(self) -> None:

@@ -45,13 +45,13 @@
   </div>
 </article>
 
-{% if previous_post or next_post %}
+{% if newer_post or older_post %}
 <nav class="post-footer-nav" aria-label="{{ ui('post_navigation') }}">
-  {% if previous_post %}
-  <a href="{{ url(previous_post.url) }}" rel="prev">← {{ ui('previous_post') }}</a>
+  {% if newer_post %}
+  <a class="post-nav-newer" href="{{ url(newer_post.url) }}" rel="next">← {{ ui('newer') }}</a>
   {% endif %}
-  {% if next_post %}
-  <a href="{{ url(next_post.url) }}" rel="next">{{ ui('next_post') }} →</a>
+  {% if older_post %}
+  <a class="post-nav-older" href="{{ url(older_post.url) }}" rel="prev">{{ ui('older') }} →</a>
   {% endif %}
 </nav>
 {% endif %}

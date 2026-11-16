@@ -54,6 +54,27 @@ result with `byggleaf serve`.
 """
 
 
+GITIGNORE = """\
+# 构建产物：每次 build 都会整体重写
+public/
+.byggleaf-build-*/
+.byggleaf-public-*/
+
+# 本地环境与 Python 缓存（花园本身就是 Markdown，不需要提交这些）
+.venv/
+venv/
+build/
+dist/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# 编辑器与系统垃圾
+.DS_Store
+Thumbs.db
+"""
+
+
 ABOUT_PAGE = """\
 # About
 
@@ -68,11 +89,11 @@ It is one of only two links in the navbar. Replace this text with your own.
 STATEMENT_PAGE = """\
 # Statement
 
-ByggLeaf is a benevolent dictator for your digital garden.
+ByggLeaf is built for one garden at a time.
 
 It has no theme system, no custom HTML, no custom CSS, no JavaScript, and no
 web fonts. What it does have is a measured column, a native serif voice, and a
-small set of decisions made on your behalf.
+small, fixed set of choices you never have to revisit.
 
 This page is not in the navbar. It exists because a folder contained an
 `index.md`, and that is enough.
@@ -153,6 +174,13 @@ def init_site(root: Path, *, force: bool = False) -> ScaffoldResult:
     # 内容目录。已存在配置且未加 --force 的情况在上方已经报错。
     _write_file(config_path, config_text, force=force)
     created.append(config_path)
+
+    # 花园本身只该提交 Markdown、配置和媒体；构建产物与本地环境一律忽略。
+    gitignore_path = root / ".gitignore"
+    if _write_file(gitignore_path, GITIGNORE, force=force):
+        created.append(gitignore_path)
+    else:
+        skipped.append(gitignore_path)
 
     for relative_path, text in CONTENT_FILES.items():
         target = root / relative_path

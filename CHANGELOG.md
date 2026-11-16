@@ -4,8 +4,24 @@
 
 ## 未发布
 
+### 变更
+
+- 包元数据的作者改为 `Hao Wu <hao.wu@ortzikantu.com>`。
+- 贡献政策明确：不接受 Pull Request，只接受经过 GPG 签名的补丁；不接受未经
+  制作者或提交者过目、审阅的 AI 翻译与 AI 代码。
+
+- 文章底部的上下篇改为「左新右旧」：左边通往更新的文章、右边通往更旧的文章，
+  文案复用分页已有的较新/更早；只有一侧时各守自己那一端。
+- 文章列表的摘要取消 58ch 宽度上限，铺满正文栏；首页分区标题加了一道陶土短杠
+  并略微放大。
+- 移除「有主见」「仁慈独裁者」等表述，README、包描述与示例 statement 页同步。
+
 ### 新增
 
+- `byggleaf init` 现在会写出 `.gitignore`，忽略 `public/`、`.byggleaf-*`、
+  `.venv/`、`venv/`、`build/`、`dist/`、`__pycache__/` 等构建产物与本地环境。
+- `byggleaf new content` 生成的文章 front matter 预置全部受支持字段
+  （`title`、`date`、`updated`、`author`、`tags`、`draft`、`license`、`license_url`）。
 - `byggleaf build` 的摘要新增 `version` 行，直接打印当前版本号：换过安装、
   改过版本号或打开旧 `public/` 时，不会再分不清构建用的是哪一版。
 

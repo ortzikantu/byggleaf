@@ -180,18 +180,30 @@ a:hover {
   align-items: baseline;
   justify-content: space-between;
   gap: 1.25rem;
-  margin-bottom: 0.25rem;
-  padding-bottom: 0.72rem;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.8rem;
   border-bottom: 1px solid var(--rule);
 }
 
 .section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
   color: var(--color-forest-ink);
-  font-size: 0.78rem;
+  font-size: 0.95rem;
   font-weight: 700;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.13em;
   line-height: 1.4;
   text-transform: uppercase;
+}
+
+/* 一道陶土短杠给分区一个视觉落点，比加粗整行更克制。 */
+.section-heading h2::before {
+  content: "";
+  flex: none;
+  width: 1.6rem;
+  height: 2px;
+  background: var(--color-terracotta);
 }
 
 /* --------------------------------------------------------------------------
@@ -258,7 +270,7 @@ a:hover {
 }
 
 .post-summary {
-  max-width: 58ch;
+  max-width: none;
   margin: 0.62rem 0 0;
   color: var(--color-graphite-ink);
   font-size: 0.98rem;
@@ -562,8 +574,8 @@ a:hover {
   text-decoration: none;
 }
 
-/* 只有「下一篇」时（首篇）也要贴右，只有「上一篇」时（末篇）保持贴左。 */
-.post-footer-nav a[rel="next"] {
+/* 左边往新、右边往旧；只有一侧时各守自己那一端。 */
+.post-footer-nav .post-nav-older {
   margin-inline-start: auto;
 }
 

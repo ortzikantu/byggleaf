@@ -1,6 +1,6 @@
 # ByggLeaf
 
-ByggLeaf 是一个极致克制、有主见的静态网站生成器。你写 Markdown，它负责排版。
+ByggLeaf 是一个极致克制的静态网站生成器。你写 Markdown，它负责排版。
 没有主题系统，没有自定义模板，没有自定义 CSS/JS，没有外部 Web 字体。只有一条
 65ch 宽、居中、使用系统原生衬线体的阅读栏。
 
@@ -18,7 +18,7 @@ ByggLeaf 是一个极致克制、有主见的静态网站生成器。你写 Mark
 **ByggLeaf 不是通用 SSG，也从不打算成为通用 SSG。**
 
 它只服务一个目标：把一个人的 Markdown 数字花园，以一套固定、克制、可预测的
-方式排版成静态网站。它是仁慈独裁者制作的专用工具，不是平台。
+方式排版成静态网站。它是为一座个人花园打造的专用工具，不是平台。
 
 以下内容不在路线图中：
 
@@ -93,6 +93,7 @@ byggleaf serve
 ```text
 my-garden/
 ├── byggleaf.toml
+├── .gitignore        # 忽略 public/、.venv/、build/ 等，只让源文件进版本库
 ├── assets/
 │   ├── img/          # 图片；favicon.ico 在这里才显示图标
 │   ├── video/
@@ -108,6 +109,10 @@ my-garden/
 
 `init` 只会创建缺失的文件。已有 `byggleaf.toml` 时默认拒绝执行；显式使用
 `byggleaf init --force` 才会覆盖生成的文件（不会删除你的其他内容）。
+
+生成的 `.gitignore` 已经覆盖 `public/`、`.byggleaf-build-*`、`.venv/`、`venv/`、
+`build/`、`dist/`、`__pycache__/` 与编辑器垃圾，所以花园仓库里只有 Markdown、
+配置和媒体进版本库。
 
 ## 内容约定
 
@@ -149,7 +154,8 @@ byggleaf new content
 ```
 
 会从包内 `resources/article.example.md` 创建 `content/posts/new-article.md`，自动写入当前
-日期时间、标题 `New Article`，并预留 `updated`、`author`、`tags`、`draft` 字段。
+日期时间、标题 `New Article`，并预置 `updated`、`author`、`tags`、`draft`、
+`license`、`license_url` 全部受支持的字段（值留空，填了就生效）。
 如果文件已存在，会继续创建 `new-article-2.md`，不会覆盖已有文章。
 
 按 `date` 倒序生成：
@@ -242,8 +248,9 @@ public/404.html
 每篇文章正文结束之后，自上而下两段，各用一条 1px 细线分隔，没有卡片、
 没有背景色：
 
-1. **上一篇 / 下一篇**：只有标签和箭头，左右分布，不带文章标题。
-   全站按 `date` 倒序串联，跨分页也连续；没有相邻文章就不渲染这一行。
+1. **较新 / 更早**：只有标签和箭头，不带文章标题。**左边通往更新的文章，
+   右边通往更旧的文章**；只有一侧时，那一侧守在自己那一端。全站按 `date`
+   倒序串联，跨分页也连续；没有相邻文章就不渲染这一行。
 2. **许可**：`license` 原样显示，前面加一个本地化前缀（中文「本文采用」，
    英文「Licensed under」）；有 `license_url` 时套成链接，并在 `<head>`
    同时输出 `<link rel="license">`。`license = "CC0 1.0"` 也可以不带链接。
@@ -704,6 +711,15 @@ python -m twine check dist/*
 ```
 
 版本号只在 `pyproject.toml` 维护；生成页面、CLI、tag 校验和发布产物都读取同一份值。
+
+## 贡献
+
+**不接受 Pull Request。** 只接受经过 GPG 签名的补丁：用 `git format-patch --signoff`
+生成，提交本身也带签名（`git commit -sS`），把 `.patch` 附在 issue 里或发到
+<hao.wu@ortzikantu.com>。签名无法验证的补丁不会被审阅。
+
+**不接受未经相应制作者或提交者过目、审阅的 AI 翻译与 AI 代码。** 提交者对每一行
+负责，必须自己读完、验证过再发出。完整规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 许可证
 

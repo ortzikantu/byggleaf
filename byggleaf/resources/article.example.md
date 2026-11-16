@@ -5,5 +5,6 @@ updated = ""
 author = ""
 tags = []
 draft = false
+license = ""
+license_url = ""
 +++
-

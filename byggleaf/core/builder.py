@@ -467,8 +467,8 @@ class Builder:
 
         for index, post in enumerate(posts):
             # posts 是最新在前：上一项更新，下一项更旧。
-            newer = posts[index - 1] if index > 0 else None
-            older = posts[index + 1] if index + 1 < len(posts) else None
+            newer_post = posts[index - 1] if index > 0 else None
+            older_post = posts[index + 1] if index + 1 < len(posts) else None
             license_text, license_url = self._license(post)
             files.append(
                 OutputFile(
@@ -476,8 +476,8 @@ class Builder:
                     content=self.templates.render(
                         "post.html",
                         post=post,
-                        previous_post=older,
-                        next_post=newer,
+                        newer_post=newer_post,
+                        older_post=older_post,
                         license_text=license_text,
                         license_url=license_url,
                         nav=self._nav("home"),
