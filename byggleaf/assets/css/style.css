@@ -19,6 +19,7 @@
 
   --measure: 65ch;
   --rule: rgba(143, 168, 137, 0.42);
+  --rule-thick: 2px;
   --wash: rgba(143, 168, 137, 0.14);
   --paper-deep: #ECE7DA;
   --muted-ink: rgba(36, 61, 50, 0.68);
@@ -97,7 +98,7 @@ body {
   line-height: 1.4;
   text-decoration: none;
   text-transform: uppercase;
-  border-bottom: 1px solid transparent;
+  border-bottom: var(--rule-thick) solid transparent;
 }
 
 .site-nav a:hover {
@@ -156,19 +157,23 @@ a:hover {
   margin-bottom: clamp(3rem, 6vw, 4.75rem);
 }
 
+/* 首屏与元信息同一套终端语气：等宽、正字距、克制的字重。 */
 .hero h1 {
-  font-size: clamp(2.3rem, 1.55rem + 4.2vw, 4.2rem);
+  font-family: var(--font-mono);
+  font-size: clamp(1.95rem, 1.4rem + 2.9vw, 3.15rem);
   font-weight: 500;
-  line-height: 1.02;
-  letter-spacing: -0.045em;
+  line-height: 1.18;
+  letter-spacing: 0.02em;
 }
 
 .hero-subtitle {
   max-width: 48ch;
-  margin: 1.35rem 0 0;
+  margin: 1.25rem 0 0;
   color: var(--color-forest-ink);
-  font-size: clamp(1.08rem, 1rem + 0.45vw, 1.32rem);
-  line-height: 1.55;
+  font-family: var(--font-mono);
+  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.08rem);
+  line-height: 1.72;
+  letter-spacing: 0.055em;
 }
 
 .home-section + .home-section {
@@ -202,7 +207,7 @@ a:hover {
   content: "";
   flex: none;
   width: 1.6rem;
-  height: 2px;
+  height: var(--rule-thick);
   background: var(--color-terracotta);
 }
 
@@ -229,12 +234,13 @@ a:hover {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.2rem 0.35rem;
-  margin: 0 0 0.42rem;
+  gap: 0.2rem 0.4rem;
+  margin: 0 0 0.46rem;
   color: var(--muted-ink);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   line-height: 1.5;
   text-transform: uppercase;
 }
@@ -247,7 +253,7 @@ a:hover {
 
 .post-meta .post-author {
   font-weight: 400;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.06em;
   text-transform: none;
 }
 
@@ -256,9 +262,10 @@ a:hover {
 }
 
 .post-list-title {
-  font-size: clamp(1.3rem, 1.17rem + 0.52vw, 1.62rem);
+  font-size: clamp(1.16rem, 1.08rem + 0.38vw, 1.38rem);
   font-weight: 600;
-  line-height: 1.25;
+  letter-spacing: -0.012em;
+  line-height: 1.32;
 }
 
 .post-list-title a {
@@ -273,8 +280,8 @@ a:hover {
   max-width: none;
   margin: 0.62rem 0 0;
   color: var(--color-graphite-ink);
-  font-size: 0.98rem;
-  line-height: 1.68;
+  font-size: 0.96em;
+  line-height: 1.66;
 }
 
 .empty-state {
@@ -345,8 +352,9 @@ a:hover {
 }
 
 .project-name {
-  font-size: 1.12rem;
+  font-size: clamp(1rem, 0.97rem + 0.18vw, 1.08rem);
   font-weight: 600;
+  letter-spacing: -0.008em;
   line-height: 1.35;
 }
 
@@ -361,8 +369,8 @@ a:hover {
 .project-description {
   margin: 0.32rem 0 0;
   color: var(--muted-ink);
-  font-size: 0.96rem;
-  line-height: 1.62;
+  font-size: 0.92em;
+  line-height: 1.6;
 }
 
 /* --------------------------------------------------------------------------

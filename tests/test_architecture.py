@@ -211,6 +211,7 @@ class StaticAssetTests(unittest.TestCase):
             "--color-graphite-ink: #303832",
             "--color-terracotta: #C47B52",
             "--measure: 65ch",
+            "--rule-thick: 2px",
         ):
             with self.subTest(token=token):
                 self.assertIn(token, css)
