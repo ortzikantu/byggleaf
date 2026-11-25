@@ -157,23 +157,21 @@ a:hover {
   margin-bottom: clamp(3rem, 6vw, 4.75rem);
 }
 
-/* 首屏与元信息同一套终端语气：等宽、正字距、克制的字重。 */
+/* 首屏与文章列表同族：同一衬线、同一字重与字距，只放大字号。 */
 .hero h1 {
-  font-family: var(--font-mono);
-  font-size: clamp(1.95rem, 1.4rem + 2.9vw, 3.15rem);
-  font-weight: 500;
-  line-height: 1.18;
-  letter-spacing: 0.02em;
+  font-size: clamp(2rem, 1.52rem + 2.5vw, 2.95rem);
+  font-weight: 600;
+  line-height: 1.22;
+  letter-spacing: -0.012em;
 }
 
+/* 副标题与列表摘要同字号、同色、同行高，读起来是同一层文字。 */
 .hero-subtitle {
   max-width: 48ch;
-  margin: 1.25rem 0 0;
-  color: var(--color-forest-ink);
-  font-family: var(--font-mono);
-  font-size: clamp(0.95rem, 0.9rem + 0.3vw, 1.08rem);
-  line-height: 1.72;
-  letter-spacing: 0.055em;
+  margin: 0.9rem 0 0;
+  color: var(--color-graphite-ink);
+  font-size: 0.96em;
+  line-height: 1.66;
 }
 
 .home-section + .home-section {
