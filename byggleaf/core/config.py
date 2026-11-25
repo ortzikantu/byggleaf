@@ -78,6 +78,7 @@ class Site:
     baseurl: str
     hero_title: str = ""
     hero_subtitle: str = ""
+    hero_image: str = ""
     copyright: str = ""
     language: str = DEFAULT_LANGUAGE
     posts_per_page: int = DEFAULT_POSTS_PER_PAGE
@@ -161,6 +162,8 @@ def load_config(path: Path) -> Config:
     # 没写 hero_title 时沿用 title，老配置不用改。
     hero_title = _string(site_table, "hero_title", where="[site]") or title
     hero_subtitle = _string(site_table, "hero_subtitle", where="[site]")
+    # 首屏照片：给了就换成报头式头图，没给就保持纯文字首屏。
+    hero_image = _string(site_table, "hero_image", where="[site]")
     copyright_text = _string(site_table, "copyright", where="[site]")
     raw_language = _string(site_table, "language", where="[site]") or DEFAULT_LANGUAGE
     try:
@@ -212,6 +215,7 @@ def load_config(path: Path) -> Config:
         baseurl=baseurl,
         hero_title=hero_title,
         hero_subtitle=hero_subtitle,
+        hero_image=hero_image,
         copyright=copyright_text,
         language=language,
         posts_per_page=posts_per_page,

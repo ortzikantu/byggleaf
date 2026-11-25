@@ -23,7 +23,15 @@
   --wash: rgba(143, 168, 137, 0.14);
   --paper-deep: #ECE7DA;
   --muted-ink: rgba(36, 61, 50, 0.68);
+
+  /* 报头式首屏专用：双色调、墨块与网点 */
+  --hero-tint: #243d32;
+  --hero-image-filter: grayscale(1) contrast(1.06) brightness(0.94);
+  --hero-dot: rgba(36, 61, 50, 0.5);
+  --plate-bg: #243d32;
+  --plate-muted: rgba(244, 240, 230, 0.82);
 }
+
 
 *,
 *::before,
@@ -173,6 +181,97 @@ a:hover {
   font-size: 0.96em;
   line-height: 1.66;
 }
+
+/* --------------------------------------------------------------------------
+   报头式首屏：版心内的照片，标题压在实色墨块上
+   -------------------------------------------------------------------------- */
+
+.hero--media {
+  max-width: 100%;
+}
+
+.hero-figure {
+  position: relative;
+  margin: 0;
+  overflow: hidden;
+  border-radius: 0.375rem;
+  background: var(--paper-deep);
+}
+
+.hero-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 21 / 9;
+  object-fit: cover;
+  object-position: center 40%;
+  filter: var(--hero-image-filter);
+  /* 图挂掉时浏览器只显示 alt，这里让那行字居中、可读。 */
+  background: var(--paper-deep);
+  color: var(--muted-ink);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+/* 双色调：把任意照片压成「墨绿—纸」两种油墨。 */
+.hero-figure::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: var(--hero-tint);
+  mix-blend-mode: multiply;
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/* 重档：网点，近看有印刷颗粒；小屏会放大网点间距避免摩尔纹。 */
+.hero-figure::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background-image: radial-gradient(
+    circle at center,
+    var(--hero-dot) 0.5px,
+    transparent 0.55px
+  );
+  background-size: 3px 3px;
+  mix-blend-mode: multiply;
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* 小字说明贴在右下角，像照片边上的注脚。 */
+.hero-caption {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  z-index: 3;
+  max-width: 78%;
+  margin: 0;
+  padding: 0.34rem 0.6rem;
+  background: var(--plate-bg);
+  color: var(--plate-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  line-height: 1.5;
+  border-start-start-radius: 0.375rem;
+}
+
+/* 只给屏幕阅读器的标题：视觉上不出现，结构上仍是页面唯一 H1。 */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 
 .home-section + .home-section {
   margin-top: clamp(3.5rem, 7vw, 5rem);
@@ -727,13 +826,45 @@ a:hover {
     padding-block: 1.55rem;
   }
 
+  .hero-image {
+    aspect-ratio: 16 / 9;
+  }
+
+  .hero-figure::after {
+    background-size: 4px 4px;
+    opacity: 0.3;
+  }
+
+  .hero-caption {
+    max-width: 88%;
+    padding: 0.3rem 0.5rem;
+  }
+
 }
 
+
 @media print {
+
   .site-header,
   .skip-link,
   .post-footer-nav {
     display: none;
+  }
+
+  .hero-image,
+  .hero-figure::before,
+  .hero-figure::after {
+    display: none;
+  }
+
+  .hero-caption {
+    position: static;
+    max-width: none;
+    padding: 0;
+    margin-block-start: 0.5rem;
+    background: none;
+    color: inherit;
+    border-radius: 0;
   }
 
   .site-shell {

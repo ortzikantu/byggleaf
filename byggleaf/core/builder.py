@@ -32,7 +32,7 @@ import uuid
 from dataclasses import dataclass, replace
 from pathlib import Path
 
-from .config import DEFAULT_LANGUAGE, Config
+from .config import DEFAULT_LANGUAGE, Config, compact_url
 from .jinja import TemplateEngine, TemplateError
 from .locales import Locale, LocaleError, load_locale
 from .markdown import (
@@ -403,6 +403,20 @@ class Builder:
 
     # -- 渲染 ----------------------------------------------------------------
 
+    def _media_url(self, value: str) -> str:
+        """站内路径拼 baseurl，站外地址原样返回；站内文件不存在就回退文字首屏。"""
+
+        if not value:
+            return ""
+        if compact_url(value).startswith(("http://", "https://", "//")):
+            return value
+        if not (self.root / value.lstrip("/")).is_file():
+            self.notes.append(
+                f"hero_image not found: {value}; falling back to the text hero."
+            )
+            return ""
+        return self.config.site.url(value)
+
     def _license(self, post: Post) -> tuple[str, str]:
         """许可文字与链接只来自文章 front matter；没写就不显示。"""
 
@@ -456,6 +470,7 @@ class Builder:
                         meta_description=fallback_description,
                         canonical_path=_pagination_url(page_number),
                         og_type="website",
+                        hero_image_url=self._media_url(site.hero_image),
                     ),
                 )
             )

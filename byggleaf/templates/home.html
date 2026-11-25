@@ -3,10 +3,21 @@
 
 {% block content %}
 {% if pagination.current_page == 1 %}
-<section class="hero" aria-labelledby="hero-title">
+<section class="hero{% if hero_image_url %} hero--media{% endif %}" aria-labelledby="hero-title">
+  {% if hero_image_url %}
+  {# 报头式首屏：只有照片与右下角的小字说明。标题保留给屏幕阅读器。 #}
+  <figure class="hero-figure">
+    <img class="hero-image" src="{{ hero_image_url }}" alt="{{ site.hero_title }}">
+    <h1 class="visually-hidden" id="hero-title">{{ site.hero_title }}</h1>
+    {% if site.hero_subtitle %}
+    <figcaption class="hero-caption">{{ site.hero_subtitle }}</figcaption>
+    {% endif %}
+  </figure>
+  {% else %}
   <h1 id="hero-title">{{ site.hero_title }}</h1>
   {% if site.hero_subtitle %}
   <p class="hero-subtitle">{{ site.hero_subtitle }}</p>
+  {% endif %}
   {% endif %}
 </section>
 {% endif %}

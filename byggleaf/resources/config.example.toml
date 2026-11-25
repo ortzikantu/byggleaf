@@ -5,6 +5,9 @@
 title = "My Digital Garden"
 hero_title = "My Digital Garden"
 hero_subtitle = "用代码和文字记录生活。"
+# 给张照片就把首屏换成报头式：图在版心内，标题压在实色墨块上，照片统一压成双色调。
+# 留空则保持纯文字首屏。图片放在 assets/img/ 下即可被构建复制。
+# hero_image = "assets/img/hero.jpg"
 baseurl = "https://example.com"
 copyright = "Your Name"
 language = "zh-CN"

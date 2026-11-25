@@ -234,6 +234,44 @@ class BuildTests(unittest.TestCase):
         self.build()
         self.assertNotIn("post-license", self.read("posts/hello-world/index.html"))
 
+    def test_hero_image_renders_the_masthead_layout(self) -> None:
+        (self.root / "assets" / "img" / "hero.jpg").write_bytes(b"jpeg")
+        self.set_site_option('hero_image = "assets/img/hero.jpg"')
+        self.build()
+        home = self.read("index.html")
+        self.assertIn('class="hero hero--media"', home)
+        self.assertIn('class="hero-image"', home)
+        self.assertIn(
+            'src="https://example.com/assets/img/hero.jpg" alt="My Digital Garden"', home
+        )
+        self.assertIn('class="hero-caption"', home)
+        self.assertIn('<h1 class="visually-hidden" id="hero-title">', home)
+        # 不能带尺寸属性，否则会盖过 CSS 的宽高比。
+        self.assertNotIn("width=\"1280\"", home)
+
+    def test_hero_image_accepts_an_external_url(self) -> None:
+        self.set_site_option('hero_image = "https://cdn.example.com/hero.jpg"')
+        self.build()
+        home = self.read("index.html")
+        self.assertIn('src="https://cdn.example.com/hero.jpg"', home)
+        self.assertNotIn("https://example.com/https:", home)
+
+    def test_missing_hero_image_falls_back_to_the_text_hero(self) -> None:
+        self.set_site_option('hero_image = "assets/img/nope.jpg"')
+        result = self.build()
+        home = self.read("index.html")
+        self.assertIn('<section class="hero" ', home)
+        self.assertIn('<h1 id="hero-title">My Digital Garden</h1>', home)
+        self.assertNotIn("hero-image", home)
+        self.assertTrue(any("hero_image not found" in note for note in result.notes))
+
+    def test_without_hero_image_the_text_hero_stays(self) -> None:
+        self.build()
+        home = self.read("index.html")
+        self.assertIn('<section class="hero" ', home)
+        self.assertNotIn("hero-image", home)
+        self.assertNotIn("hero-caption", home)
+
     def test_title_is_head_only_and_hero_title_is_visible(self) -> None:
         config_path = self.root / "byggleaf.toml"
         config_path.write_text(

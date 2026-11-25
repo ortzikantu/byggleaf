@@ -160,6 +160,19 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config.site.title, "Garden · ByggLeaf")
         self.assertEqual(config.site.hero_title, "My Digital Garden")
 
+    def test_hero_image_defaults_to_empty(self) -> None:
+        config = load_config(self.write('[site]\ntitle = "Garden"\nbaseurl = ""\n'))
+        self.assertEqual(config.site.hero_image, "")
+
+    def test_hero_image_is_read(self) -> None:
+        config = load_config(
+            self.write(
+                '[site]\ntitle = "Garden"\nbaseurl = ""\n'
+                'hero_image = "assets/img/hero.jpg"\n'
+            )
+        )
+        self.assertEqual(config.site.hero_image, "assets/img/hero.jpg")
+
     def test_customurl_defaults_to_empty(self) -> None:
         self.assertEqual(load_config(self.write(CONFIG)).customurl, ())
 
