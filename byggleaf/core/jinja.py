@@ -79,6 +79,7 @@ class TemplateEngine:
 
         context.setdefault("site", self.config.site)
         context.setdefault("projects", self.config.projects)
+        context.setdefault("customurl", self.config.customurl)
         try:
             template = self.environment.get_template(template_name)
             return template.render(**context)

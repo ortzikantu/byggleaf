@@ -196,10 +196,12 @@ class BuildTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_site_license_appears_on_posts_with_a_head_link(self) -> None:
-        self.set_site_option(
+    def test_license_comes_from_front_matter_only(self) -> None:
+        (self.root / "content/posts/hello-world.md").write_text(
+            '+++\ntitle = "Hello, World"\ndate = 2025-01-01\n'
             'license = "CC BY-NC-SA 4.0"\n'
-            'license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"'
+            'license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"\n+++\n\nBody.\n',
+            encoding="utf-8",
         )
         self.build()
 
@@ -210,30 +212,21 @@ class BuildTests(unittest.TestCase):
             'rel="license">CC BY-NC-SA 4.0</a>',
             post,
         )
-        # 独立页面没有许可，也不该出现版权块。
+        self.assertIn("This post is licensed under", post)
+
+        # 独立页面和没写许可的文章都不出现版权块。
         self.assertNotIn('rel="license"', self.read("about/index.html"))
 
-    def test_post_license_overrides_the_site_default(self) -> None:
-        self.set_site_option(
-            'license = "CC BY 4.0"\nlicense_url = "https://example.com/site-license"'
-        )
+    def test_license_without_url_is_plain_text(self) -> None:
         (self.root / "content/posts/hello-world.md").write_text(
-            '+++\ntitle = "Hello, World"\ndate = 2025-01-01\n'
-            'license = "WTFPL"\nlicense_url = "https://example.com/wtfpl"\n+++\n\nBody.\n',
+            '+++\ntitle = "Hello, World"\ndate = 2025-01-01\nlicense = "CC0 1.0"\n+++\n\nBody.\n',
             encoding="utf-8",
         )
         self.build()
         post = self.read("posts/hello-world/index.html")
-        self.assertIn('rel="license">WTFPL</a>', post)
-        self.assertIn('href="https://example.com/wtfpl"', post)
-        self.assertNotIn("site-license", post)
-
-    def test_license_without_url_is_plain_text(self) -> None:
-        self.set_site_option('license = "CC0 1.0"')
-        self.build()
-        post = self.read("posts/hello-world/index.html")
         self.assertIn('class="post-license"', post)
-        self.assertIn("Licensed under", post)
+        self.assertIn("This post is licensed under", post)
+        self.assertIn('class="post-license-mark"', post)
         self.assertIn("CC0 1.0", post)
         self.assertNotIn('rel="license"', post)
 
@@ -241,28 +234,70 @@ class BuildTests(unittest.TestCase):
         self.build()
         self.assertNotIn("post-license", self.read("posts/hello-world/index.html"))
 
+    def test_title_is_head_only_and_hero_title_is_visible(self) -> None:
+        config_path = self.root / "byggleaf.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8")
+            .replace('\ntitle = "My Digital Garden"\n', '\ntitle = "Head Title"\n')
+            .replace(
+                '\nhero_title = "My Digital Garden"\n',
+                '\nhero_title = "Visible Garden"\n',
+            ),
+            encoding="utf-8",
+        )
+        self.build()
+
+        home = self.read("index.html")
+        self.assertIn("<title>Head Title</title>", home)
+        self.assertIn('<h1 id="hero-title">Visible Garden</h1>', home)
+        self.assertNotIn(">Head Title</h1>", home)
+        # 文章页的 head 仍用站点标题拼接。
+        self.assertIn("<title>Hello, World · Head Title</title>",
+                      self.read("posts/hello-world/index.html"))
+
+    def test_footer_links_render_external_and_internal(self) -> None:
+        config_path = self.root / "byggleaf.toml"
+        config_path.write_text(
+            config_path.read_text(encoding="utf-8")
+            + '\n[[customurl]]\nname = "GitHub"\nurl = "https://github.com/example"\n'
+            + '\n[[customurl]]\nname = "关于"\nurl = "/about/"\n',
+            encoding="utf-8",
+        )
+        self.build()
+
+        home = self.read("index.html")
+        self.assertIn('class="footer-links"', home)
+        self.assertIn('<a href="https://github.com/example">GitHub</a>', home)
+        self.assertIn('<a href="https://example.com/about/">关于</a>', home)
+
+    def test_post_nav_puts_the_home_link_in_the_middle(self) -> None:
+        self.write_post("older.md", "Older", "2024-01-01")
+        self.build()
+        post = self.read("posts/hello-world/index.html")
+        self.assertIn(
+            'class="post-nav-home" href="https://example.com/">Home</a>', post
+        )
+
     def test_newer_link_sits_left_and_older_sits_right(self) -> None:
         self.write_post("older.md", "Older", "2024-01-01")
         self.write_post("newer.md", "Newer", "2026-01-01")
         self.build()
 
         newest = self.read("posts/newer/index.html")
-        self.assertIn('class="post-nav-older"', newest)
         self.assertIn('rel="prev"', newest)
         self.assertIn("Older →", newest)
-        self.assertNotIn("post-nav-newer", newest)
+        self.assertNotIn('rel="next"', newest)
+        self.assertNotIn("← Newer", newest)
 
         oldest = self.read("posts/older/index.html")
-        self.assertIn('class="post-nav-newer"', oldest)
         self.assertIn('rel="next"', oldest)
         self.assertIn("← Newer", oldest)
-        self.assertNotIn("post-nav-older", oldest)
+        self.assertNotIn("Older →", oldest)
 
-        # 两边都有时，新的在左、旧的在右。
+        # 两边都有时，新的在左、首页居中、旧的在右。
         middle = self.read("posts/hello-world/index.html")
-        self.assertLess(
-            middle.index("post-nav-newer"), middle.index("post-nav-older")
-        )
+        self.assertLess(middle.index("post-nav-slot-newer"), middle.index("post-nav-home"))
+        self.assertLess(middle.index("post-nav-home"), middle.index("post-nav-slot-older"))
 
     def test_drafts_are_skipped_by_default(self) -> None:
         self.write_draft("secret.md")
@@ -346,7 +381,7 @@ class BuildTests(unittest.TestCase):
             f'<meta name="generator" content="ByggLeaf {VERSION}">', home
         )
         self.assertIn(
-            f"Built with ByggLeaf {VERSION}. No JavaScript or tracking added by ByggLeaf.", home
+            f"This site is generated by ByggLeaf {VERSION}.", home
         )
         self.assertIn('href="https://example.com/about/"', home)
         self.assertNotIn(">Posts</a>", home)
@@ -561,7 +596,7 @@ class BuildTests(unittest.TestCase):
         self.assertIn(f"由 ByggLeaf {VERSION} 生成", home)
 
         post = self.read("posts/hello-world/index.html")
-        self.assertIn("较新", post)
+        self.assertIn("新叶", post)
         self.assertIn('aria-label="文章导航"', post)
 
     def test_traditional_chinese_language(self) -> None:

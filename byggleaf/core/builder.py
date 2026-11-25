@@ -404,18 +404,13 @@ class Builder:
     # -- 渲染 ----------------------------------------------------------------
 
     def _license(self, post: Post) -> tuple[str, str]:
-        """许可文字与链接；文章 front matter 覆盖站点默认，都没写就不显示。"""
+        """许可文字与链接只来自文章 front matter；没写就不显示。"""
 
-        site = self.config.site
-
-        def pick(key: str, fallback: str) -> str:
+        def pick(key: str) -> str:
             value = post.meta.get(key)
-            return value if isinstance(value, str) and value.strip() else fallback
+            return value if isinstance(value, str) and value.strip() else ""
 
-        return (
-            pick("license", site.license),
-            pick("license_url", site.license_url),
-        )
+        return pick("license"), pick("license_url")
 
     def _render_site(
         self,

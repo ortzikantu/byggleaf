@@ -493,9 +493,22 @@ a:hover {
 
 .prose img {
   display: block;
-  max-width: 100%;
+  max-width: 92%;
   height: auto;
   margin-inline: auto;
+  border-radius: 0.375rem;
+}
+
+/* 内嵌视频/地图等：与正文同宽、居中、圆角；作者写了 height 就以 height 为准。 */
+.prose iframe {
+  display: block;
+  width: 92%;
+  max-width: 92%;
+  margin: 2rem auto;
+  border: 0;
+  border-radius: 0.375rem;
+  aspect-ratio: 16 / 9;
+  background: var(--paper-deep);
 }
 
 .prose figure {
@@ -559,8 +572,9 @@ a:hover {
 
 /* 文章底部：上下篇与许可，各用一条细线分隔，不加卡片。 */
 .post-footer-nav {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
   gap: 1rem;
   margin-block-start: 3rem;
   padding-block-start: 1.2rem;
@@ -569,14 +583,21 @@ a:hover {
   letter-spacing: 0.04em;
 }
 
+.post-nav-slot-older {
+  text-align: end;
+}
+
 .post-footer-nav a {
   color: var(--color-forest-ink);
   text-decoration: none;
 }
 
-/* 左边往新、右边往旧；只有一侧时各守自己那一端。 */
-.post-footer-nav .post-nav-older {
-  margin-inline-start: auto;
+/* 首页是中间那一格，不抢两侧的方向感。 */
+.post-nav-home {
+  color: var(--muted-ink);
+  font-size: 0.7rem;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
 }
 
 .post-footer-nav a:hover,
@@ -591,6 +612,11 @@ a:hover {
   color: var(--muted-ink);
   font-size: 0.76rem;
   letter-spacing: 0.045em;
+}
+
+.post-license-mark {
+  margin-inline-end: 0.45rem;
+  color: var(--color-living-leaf);
 }
 
 .post-license a {
@@ -627,6 +653,33 @@ a:hover {
 
 .colophon {
   letter-spacing: 0.025em;
+}
+
+.colophon-note {
+  color: var(--muted-ink);
+}
+
+.footer-links {
+  margin-block-end: 0.9rem;
+}
+
+.footer-links ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.28rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.footer-links a {
+  color: var(--muted-ink);
+  text-decoration: none;
+}
+
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: var(--color-terracotta);
 }
 
 .skip-link {

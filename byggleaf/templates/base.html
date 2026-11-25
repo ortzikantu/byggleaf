@@ -45,10 +45,20 @@
     </main>
 
     <footer class="site-footer">
+      {% if customurl %}
+      <nav class="footer-links" aria-label="{{ ui('footer_links') }}">
+        <ul>
+          {% for item in customurl %}
+          <li><a href="{{ item.url if item.is_external else url(item.url) }}">{{ item.name }}</a></li>
+          {% endfor %}
+        </ul>
+      </nav>
+      {% endif %}
       {% if site.copyright %}
       <p class="copyright">{{ site.copyright }}</p>
       {% endif %}
       <p class="colophon">{{ ui('colophon', version=version) }}</p>
+      <p class="colophon-note">{{ ui('colophon_note') }}</p>
     </footer>
   </div>
 </body>

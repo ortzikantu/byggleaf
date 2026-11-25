@@ -57,17 +57,30 @@ class Project:
 
 
 @dataclass(frozen=True, slots=True)
+class CustomLink:
+    """页脚里的一个自定义链接：站外地址或站内页面。"""
+
+    name: str
+    url: str
+
+    @property
+    def is_external(self) -> bool:
+        """站外链接不拼接 baseurl。"""
+
+        return compact_url(self.url).startswith(("http://", "https://", "mailto:", "//"))
+
+
+@dataclass(frozen=True, slots=True)
 class Site:
     """所有模板共享的站点级呈现值。"""
 
     title: str
     baseurl: str
+    hero_title: str = ""
     hero_subtitle: str = ""
     copyright: str = ""
     language: str = DEFAULT_LANGUAGE
     posts_per_page: int = DEFAULT_POSTS_PER_PAGE
-    license: str = ""
-    license_url: str = ""
 
     def url(self, path: str) -> str:
         """把站点路径转成模板使用的绝对 URL。"""
@@ -81,6 +94,7 @@ class Config:
 
     site: Site
     projects: tuple[Project, ...] = ()
+    customurl: tuple[CustomLink, ...] = ()
 
 
 def _string(
@@ -143,6 +157,9 @@ def load_config(path: Path) -> Config:
     else:
         baseurl = baseurl.rstrip("/")
 
+    # hero_title 只出现在首页大标题；title 只进 head、og 与 feed。
+    # 没写 hero_title 时沿用 title，老配置不用改。
+    hero_title = _string(site_table, "hero_title", where="[site]") or title
     hero_subtitle = _string(site_table, "hero_subtitle", where="[site]")
     copyright_text = _string(site_table, "copyright", where="[site]")
     raw_language = _string(site_table, "language", where="[site]") or DEFAULT_LANGUAGE
@@ -175,14 +192,32 @@ def load_config(path: Path) -> Config:
         description = _string(item, "description", where=f"projects[{index}]")
         projects.append(Project(name=name, url=url, description=description))
 
+    raw_links = data.get("customurl", [])
+    if not isinstance(raw_links, list):
+        raise ConfigError(f"{path.name}: [[customurl]] must be an array of tables")
+
+    customurl: list[CustomLink] = []
+    for index, item in enumerate(raw_links, start=1):
+        if not isinstance(item, dict):
+            raise ConfigError(f"{path.name}: customurl[{index}] must be a table")
+        customurl.append(
+            CustomLink(
+                name=_string(item, "name", where=f"customurl[{index}]", required=True),
+                url=_string(item, "url", where=f"customurl[{index}]", required=True),
+            )
+        )
+
     site = Site(
         title=title,
         baseurl=baseurl,
+        hero_title=hero_title,
         hero_subtitle=hero_subtitle,
         copyright=copyright_text,
         language=language,
         posts_per_page=posts_per_page,
-        license=_string(site_table, "license", where="[site]"),
-        license_url=_string(site_table, "license_url", where="[site]"),
     )
-    return Config(site=site, projects=tuple(projects))
+    return Config(
+        site=site,
+        projects=tuple(projects),
+        customurl=tuple(customurl),
+    )

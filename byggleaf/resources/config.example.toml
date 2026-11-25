@@ -1,20 +1,26 @@
 # ByggLeaf 只在一处配置。没有 [theme] 块，因为没有主题系统；
 # 下面的值就是全部公开配置面。
 [site]
+# title 只用于 <head>、og 与 feed；hero_title 是首页显示的大标题。
 title = "My Digital Garden"
+hero_title = "My Digital Garden"
 hero_subtitle = "用代码和文字记录生活。"
 baseurl = "https://example.com"
 copyright = "Your Name"
 language = "zh-CN"
 posts_per_page = 5
 
-# 文章底部的许可文字：原样显示，有 license_url 就套成链接（同时写进 <head>）。
-# 文章 front matter 里的 license / license_url 会覆盖这里。留空则整块不显示。
-# license = "CC BY-NC-SA 4.0"
-# license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"
 
 [[projects]]
 name = "Example"
 url = "https://github.com/example/example"
 description = "Example."
 
+# 页脚链接：站外地址照原样，站内路径会经 baseurl 拼接。写几条就列几条，竖排。
+# [[customurl]]
+# name = "GitHub"
+# url = "https://github.com/your-name"
+#
+# [[customurl]]
+# name = "关于本站"
+# url = "/about/"

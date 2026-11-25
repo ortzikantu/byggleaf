@@ -248,12 +248,13 @@ public/404.html
 每篇文章正文结束之后，自上而下两段，各用一条 1px 细线分隔，没有卡片、
 没有背景色：
 
-1. **较新 / 更早**：只有标签和箭头，不带文章标题。**左边通往更新的文章，
-   右边通往更旧的文章**；只有一侧时，那一侧守在自己那一端。全站按 `date`
-   倒序串联，跨分页也连续；没有相邻文章就不渲染这一行。
-2. **许可**：`license` 原样显示，前面加一个本地化前缀（中文「本文采用」，
-   英文「Licensed under」）；有 `license_url` 时套成链接，并在 `<head>`
-   同时输出 `<link rel="license">`。`license = "CC0 1.0"` 也可以不带链接。
+1. **新叶 / 旧叶**：只有标签和箭头，不带文章标题。**左边通往更新的文章，
+   右边通往更旧的文章**，正中间是回首页的链接；只有一侧时首页仍居中。
+   全站按 `date` 倒序串联，跨分页也连续；没有相邻文章就不渲染这一行。
+2. **许可**：整句形如「✦ 本文以 CC BY-NC-SA 4.0 许可协议授权使用。」，
+   文字来自文章 front matter，句式与句首符号来自界面语言；有 `license_url`
+   时套成链接，并在 `<head>` 同时输出 `<link rel="license">`。
+   `license = "CC0 1.0"` 也可以不带链接。
 
 两段都只在有内容时出现：没有相邻文章就没有导航，没有许可就不显示许可。
 打印时导航会被隐藏。
@@ -267,27 +268,36 @@ public/404.html
 
 ```toml
 [site]
-title = "My Digital Garden"
+title = "My Digital Garden"       # 只进 <head>、og 与 feed
+hero_title = "My Digital Garden"  # 首页显示的大标题，省略则沿用 title
 hero_subtitle = "用代码和文字记录生活。"
 baseurl = "https://example.com"
 copyright = "Your Name"
 language = "zh-CN"
 posts_per_page = 5
-license = "CC BY-NC-SA 4.0"
-license_url = "https://creativecommons.org/licenses/by-nc-sa/4.0/"
 
 [[projects]]
 name = "Example"
 url = "https://github.com/example/example"
 description = "Example."
+
+[[customurl]]
+name = "GitHub"
+url = "https://github.com/example"
+
+[[customurl]]
+name = "关于本站"
+url = "/about/"
 ```
 
-`title` 和 `baseurl` 必填（`baseurl` 可以是空字符串）。`projects` 会渲染在首页
+`title` 和 `baseurl` 必填（`baseurl` 可以是空字符串）。`title` 只作用于文档头部：
+`<title>`、`og:site_name`、`og:title` 后缀与 RSS 频道名；页面上可见的首页大标题是
+`hero_title`，不写就沿用 `title`，所以老配置不用改。`projects` 会渲染在首页
 项目列表，`url` 可留空。`posts_per_page` 是正整数，默认 `5`，决定首页每页显示
 多少篇文章。`baseurl` 与 `url` 按原样采用，值本身由作者负责。
-`license` 与 `license_url` 是文章底部的许可文字与链接，留空则整块不显示，
-文章 front matter 可逐篇覆盖。文字原样显示，前面只加一个来自界面语言的
-「本文采用 / Licensed under」前缀。
+`[[customurl]]` 是页脚的自定义链接，竖排显示，写几条列几条：`https://` 开头的
+站外地址照原样，以 `/` 开头的站内路径会拼上 `baseurl`。没有配置就没有这一块。
+许可不在站点配置里设置，只写在文章 front matter 的 `license` / `license_url`。
 `language` 必须是规范的 BCP 47 语言标签；当前内置 `en`、`ja`、`ko`、`yue`、`zh`、
 `zh-CN`、`zh-HK`。没有对应翻译文件时回退英语，并在构建摘要里给一行说明，不中断
 构建。它同时决定 `<html lang>` 和界面文案。

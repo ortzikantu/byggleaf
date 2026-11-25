@@ -47,17 +47,18 @@
 
 {% if newer_post or older_post %}
 <nav class="post-footer-nav" aria-label="{{ ui('post_navigation') }}">
-  {% if newer_post %}
-  <a class="post-nav-newer" href="{{ url(newer_post.url) }}" rel="next">← {{ ui('newer') }}</a>
-  {% endif %}
-  {% if older_post %}
-  <a class="post-nav-older" href="{{ url(older_post.url) }}" rel="prev">{{ ui('older') }} →</a>
-  {% endif %}
+  <span class="post-nav-slot post-nav-slot-newer">
+    {%- if newer_post %}<a href="{{ url(newer_post.url) }}" rel="next">← {{ ui('nav_newer') }}</a>{% endif -%}
+  </span>
+  <a class="post-nav-home" href="{{ url('/') }}">{{ ui('home') }}</a>
+  <span class="post-nav-slot post-nav-slot-older">
+    {%- if older_post %}<a href="{{ url(older_post.url) }}" rel="prev">{{ ui('nav_older') }} →</a>{% endif -%}
+  </span>
 </nav>
 {% endif %}
 
-{# 许可：作者写什么就显示什么，前缀来自界面语言。 #}
+{# 许可：作者写什么就显示什么，句式与符号来自界面语言。 #}
 {% if license_text %}
-<p class="post-license">{{ ui('licensed_under') }} {% if license_url %}<a href="{{ license_url }}" rel="license">{{ license_text }}</a>{% else %}{{ license_text }}{% endif %}</p>
+<p class="post-license"><span class="post-license-mark" aria-hidden="true">{{ ui('license_mark') }}</span>{{ ui('license_prefix') }} {% if license_url %}<a href="{{ license_url }}" rel="license">{{ license_text }}</a>{% else %}{{ license_text }}{% endif %}{{ ui('license_suffix') }}</p>
 {% endif %}
 {% endblock %}

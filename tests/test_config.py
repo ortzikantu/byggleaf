@@ -146,10 +146,57 @@ class ConfigTests(unittest.TestCase):
         )
         self.assertEqual(config.projects[1].url, "mailto:a@example.com")
 
-    def test_license_defaults_to_empty(self) -> None:
-        config = load_config(self.write(CONFIG))
-        self.assertEqual(config.site.license, "")
-        self.assertEqual(config.site.license_url, "")
+    def test_hero_title_falls_back_to_title(self) -> None:
+        config = load_config(self.write('[site]\ntitle = "Garden"\nbaseurl = ""\n'))
+        self.assertEqual(config.site.hero_title, "Garden")
+
+    def test_hero_title_can_differ_from_title(self) -> None:
+        config = load_config(
+            self.write(
+                '[site]\ntitle = "Garden · ByggLeaf"\n'
+                'hero_title = "My Digital Garden"\nbaseurl = ""\n'
+            )
+        )
+        self.assertEqual(config.site.title, "Garden · ByggLeaf")
+        self.assertEqual(config.site.hero_title, "My Digital Garden")
+
+    def test_customurl_defaults_to_empty(self) -> None:
+        self.assertEqual(load_config(self.write(CONFIG)).customurl, ())
+
+    def test_customurl_entries_keep_external_and_internal_apart(self) -> None:
+        config = load_config(
+            self.write(
+                CONFIG
+                + '\n[[customurl]]\nname = "GitHub"\n'
+                + 'url = "https://github.com/example"\n'
+                + '\n[[customurl]]\nname = "关于"\nurl = "/about/"\n'
+            )
+        )
+        self.assertEqual(
+            [(item.name, item.url) for item in config.customurl],
+            [("GitHub", "https://github.com/example"), ("关于", "/about/")],
+        )
+        self.assertTrue(config.customurl[0].is_external)
+        self.assertFalse(config.customurl[1].is_external)
+
+    def test_customurl_must_be_an_array_of_tables(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "array of tables"):
+            load_config(
+                self.write(
+                    '[site]\ntitle = "Garden"\nbaseurl = ""\n'
+                    '[customurl]\nname = "x"\nurl = "/"\n'
+                )
+            )
+
+    def test_customurl_entry_must_be_a_table(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "must be a table"):
+            load_config(
+                self.write('customurl = [1]\n[site]\ntitle = "Garden"\nbaseurl = ""\n')
+            )
+
+    def test_customurl_requires_name_and_url(self) -> None:
+        with self.assertRaisesRegex(ConfigError, "customurl\\[1\\].name is required"):
+            load_config(self.write(CONFIG + '\n[[customurl]]\nurl = "/x/"\n'))
 
     def test_language_is_canonicalized(self) -> None:
         config = load_config(
