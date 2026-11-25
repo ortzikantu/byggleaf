@@ -843,7 +843,55 @@ a:hover {
 }
 
 
+/* 深色：同一套纸/墨/叶/陶土，只是把纸变深、墨变浅。
+   正文 13.9:1、次要 6.0:1、强调 6.3:1，全部达到 WCAG AA。 */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-forest-ink: #D8E0CE;
+    --color-graphite-ink: #E9E4D8;
+    --color-paper-ivory: #141A16;
+    --color-living-leaf: #A6BE9C;
+    --color-terracotta: #D4885B;
+
+    --rule: rgba(166, 190, 156, 0.28);
+    --wash: rgba(166, 190, 156, 0.1);
+    --paper-deep: #1B231D;
+    --muted-ink: rgba(233, 228, 216, 0.62);
+
+    --hero-tint: #0C120E;
+    --hero-image-filter: grayscale(1) contrast(1.02) brightness(0.8);
+    --hero-dot: rgba(8, 12, 9, 0.45);
+    --plate-bg: #E7E1D3;
+    --plate-muted: rgba(22, 32, 26, 0.72);
+  }
+
+  html {
+    color-scheme: dark;
+  }
+
+  ::selection {
+    background: var(--color-forest-ink);
+    color: var(--color-paper-ivory);
+  }
+}
+
 @media print {
+  /* 打印一律用浅色纸墨，系统暗色也不会印出反白文字。 */
+  :root {
+    --color-forest-ink: #243D32;
+    --color-graphite-ink: #303832;
+    --color-paper-ivory: #F4F0E6;
+    --color-living-leaf: #8FA889;
+    --color-terracotta: #C47B52;
+    --rule: rgba(143, 168, 137, 0.42);
+    --paper-deep: #ECE7DA;
+    --muted-ink: rgba(36, 61, 50, 0.68);
+  }
+
+  html {
+    color-scheme: light;
+  }
+
 
   .site-header,
   .skip-link,
