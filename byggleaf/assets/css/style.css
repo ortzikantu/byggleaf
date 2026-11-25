@@ -287,7 +287,7 @@ a:hover {
   border-bottom: 1px solid var(--rule);
 }
 
-.section-heading h2 {
+.section-heading :is(h1, h2) {
   display: flex;
   align-items: center;
   gap: 0.7rem;
@@ -300,12 +300,30 @@ a:hover {
 }
 
 /* 一道陶土短杠给分区一个视觉落点，比加粗整行更克制。 */
-.section-heading h2::before {
+.section-heading :is(h1, h2)::before {
   content: "";
   flex: none;
   width: 1.6rem;
   height: var(--rule-thick);
   background: var(--color-terracotta);
+}
+
+/* 分页页没有首屏图，标题要大一点才撑得住版面。 */
+.section-heading h1 {
+  font-size: clamp(1.55rem, 1.3rem + 1.6vw, 2.15rem);
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  line-height: 1.28;
+}
+
+/* 分页页不画短杠、不放计数，靠留白撑版面。 */
+.section-heading--page h1::before {
+  content: none;
+}
+
+.section-heading--page {
+  margin-bottom: 1.1rem;
+  padding-bottom: 1.2rem;
 }
 
 /* --------------------------------------------------------------------------
@@ -356,6 +374,15 @@ a:hover {
 
 .post-meta time {
   font-variant-numeric: tabular-nums;
+}
+
+.section-count {
+  margin-inline-start: 0;
+  color: var(--muted-ink);
+  font-size: inherit;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 .post-list-title {
@@ -481,9 +508,9 @@ a:hover {
 }
 
 .page-title {
-  font-size: clamp(2.1rem, 1.55rem + 2.5vw, 3.35rem);
+  font-size: clamp(1.6rem, 1.3rem + 1.7vw, 2.35rem);
   font-weight: 500;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
 }
 
 .page-intro {
@@ -504,9 +531,9 @@ a:hover {
 }
 
 .post-title {
-  font-size: clamp(2.05rem, 1.45rem + 2.8vw, 3.4rem);
+  font-size: clamp(1.6rem, 1.3rem + 1.7vw, 2.35rem);
   font-weight: 500;
-  letter-spacing: -0.035em;
+  letter-spacing: -0.02em;
 }
 
 .post-header .post-meta {
@@ -842,7 +869,6 @@ a:hover {
 
 }
 
-
 /* 深色：同一套纸/墨/叶/陶土，只是把纸变深、墨变浅。
    正文 13.9:1、次要 6.0:1、强调 6.3:1，全部达到 WCAG AA。 */
 @media (prefers-color-scheme: dark) {
@@ -891,7 +917,6 @@ a:hover {
   html {
     color-scheme: light;
   }
-
 
   .site-header,
   .skip-link,

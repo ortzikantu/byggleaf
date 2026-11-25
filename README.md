@@ -168,6 +168,9 @@ byggleaf new content
 每页文章数由 `[site].posts_per_page` 控制。文章详情页的 `← All posts` 会回到
 该文章所属的分页：第 1 页返回 `/`，第 2 页返回 `/page/2/`，依此类推。
 
+首页「写作」标题后面会跟一个括号里的文章总数 `(12)`，字号与标题一致；分页后的页面
+只留一个放大的标题（`h1`），不画短杠、不重复计数，靠留白撑住没有首屏图的版面。
+
 正文开头如果有一个与 `title` 完全相同的 H1，会被自动移除，避免标题重复。
 `---` 分隔的简单 YAML front matter 也可识别，但只解析扁平的 `key: value`，
 TOML 是推荐格式。
@@ -259,6 +262,36 @@ public/404.html
 两段都只在有内容时出现：没有相邻文章就没有导航，没有许可就不显示许可。
 打印时导航会被隐藏。
 
+### 首屏
+
+默认是纯文字首屏：`hero_title` 一句大字、`hero_subtitle` 一句小字。配置了
+`hero_image` 之后换成报头式：
+
+- 照片在版心（65ch）内，21:9 裁切，小屏 16:9——刻意压扁，不抢正文；
+- 图上只留 `hero_subtitle` 一行小字，贴在右下角像照片注脚；`hero_title` 退到
+  屏幕阅读器（仍是页面唯一的 H1），视觉上不出现；
+- 照片统一走「重滤镜」：灰阶 → 墨绿双色调（`multiply`）→ 网点，不同来源的照片
+  会被压成同一种印刷质感；
+- 打印时图与网点都不输出，注脚回到普通文字；
+- 图片 `alt` 直接用 `hero_title`，不额外配置；
+- `hero_image` 写的文件不存在时（站内路径），回退到带 `hero_title` 的文字首屏，
+  并在构建摘要里打印一行 `note:`；外链图加载失败时，浏览器会把 `alt` 显示在
+  同一块版面里（等宽小字、居中），不会塌成一条缝。
+
+删掉 `hero_image` 这一行就完全回到文字首屏，没有残留样式依赖。
+
+### 深浅色
+
+样式表内置 `prefers-color-scheme` 两套 token，跟随系统切换，不需要 JavaScript：
+
+- 浅色：象牙纸底、森林墨字、陶土点缀（原始配色）；
+- 深色：纸色变深（`#141A16`）、墨色变浅（`#E9E4D8`），叶与陶土提亮；
+  正文对比度 13.9:1，次要文字 6.0:1，均超过 WCAG AA；
+- 报头式首屏的滤镜、双色调、墨块与网点都有各自的深色取值；
+- 打印时强制回到浅色纸墨，系统是深色也不会印出反白字。
+
+没有开关，也没有存储偏好——只看系统设置。
+
 ### 站点图标
 
 `byggleaf init` 会把包内的默认 `favicon.ico` 复制到 `assets/img/`。
@@ -271,6 +304,7 @@ public/404.html
 title = "My Digital Garden"       # 只进 <head>、og 与 feed
 hero_title = "My Digital Garden"  # 首页显示的大标题，省略则沿用 title
 hero_subtitle = "用代码和文字记录生活。"
+hero_image = "assets/img/hero.jpg"
 baseurl = "https://example.com"
 copyright = "Your Name"
 language = "zh-CN"
@@ -290,7 +324,8 @@ name = "关于本站"
 url = "/about/"
 ```
 
-`title` 和 `baseurl` 必填（`baseurl` 可以是空字符串）。`title` 只作用于文档头部：
+`hero_image` 可选：给了就在版心内渲染报头式首屏，没给就退回纯文字首屏。
+图片的 `alt` 直接取 `hero_title`，不需要另写描述。`title` 和 `baseurl` 必填（`baseurl` 可以是空字符串）。`title` 只作用于文档头部：
 `<title>`、`og:site_name`、`og:title` 后缀与 RSS 频道名；页面上可见的首页大标题是
 `hero_title`，不写就沿用 `title`，所以老配置不用改。`projects` 会渲染在首页
 项目列表，`url` 可留空。`posts_per_page` 是正整数，默认 `5`，决定首页每页显示

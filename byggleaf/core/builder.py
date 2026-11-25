@@ -457,6 +457,7 @@ class Builder:
                         "home.html",
                         posts=pagination.posts,
                         pagination=pagination,
+                        post_count=len(posts),
                         nav=self._nav("home"),
                         favicon=favicon,
                         meta_title=(

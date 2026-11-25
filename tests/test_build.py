@@ -316,6 +316,21 @@ class BuildTests(unittest.TestCase):
             'class="post-nav-home" href="https://example.com/">Home</a>', post
         )
 
+    def test_writing_heading_carries_the_post_count_on_every_page(self) -> None:
+        self.write_post("second.md", "Second", "2026-01-02")
+        self.set_posts_per_page(1)
+        self.build()
+
+        first = self.read("index.html")
+        second = self.read("page/2/index.html")
+        self.assertIn('<span class="section-count">(2)</span>', first)
+        # 分页页不重复计数，也不画短杠。
+        self.assertNotIn("section-count", second)
+        self.assertIn('class="section-heading section-heading--page"', second)
+        # 首页有 hero 的 H1，所以分区用 H2；分页后分区自己就是 H1。
+        self.assertIn('<h2 id="writing-title">', first)
+        self.assertIn('<h1 id="writing-title">', second)
+
     def test_newer_link_sits_left_and_older_sits_right(self) -> None:
         self.write_post("older.md", "Older", "2024-01-01")
         self.write_post("newer.md", "Newer", "2026-01-01")

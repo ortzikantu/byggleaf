@@ -23,15 +23,13 @@
 {% endif %}
 
 <section id="writing" class="home-section" aria-labelledby="writing-title">
-  {% if pagination.current_page == 1 %}
-  <div class="section-heading">
-    <h2 id="writing-title">{{ ui('writing') }}</h2>
+  <div class="section-heading{% if pagination.current_page > 1 %} section-heading--page{% endif %}">
+    {% if pagination.current_page == 1 %}
+    <h2 id="writing-title">{{ ui('writing') }}<span class="section-count">({{ post_count }})</span></h2>
+    {% else %}
+    <h1 id="writing-title">{{ ui('writing') }}</h1>
+    {% endif %}
   </div>
-  {% else %}
-  <header class="page-header">
-    <h1 id="writing-title" class="page-title">{{ ui('writing') }}</h1>
-  </header>
-  {% endif %}
 
   {% include "postlist.html" %}
 
